@@ -27,13 +27,23 @@ try {
   const { data: installations } = await octopus.rest.apps.listInstallations();
   const firstInstallation = installations[0];
 
+  const commit = await octopus.rest.repos.getCommit({
+    owner: "OmniBlocks",
+    repo: "Boxy-gh",
+    ref: brokenSha
+  });
+  const commitAuthor = commit.data.author?.login;
+
+
+
+
   if (firstInstallation) {
     const octokit = await app.auth(firstInstallation.id);
     await octokit.rest.repos.createCommitComment({
       owner: "OmniBlocks",
       repo: "Boxy-gh",
       commit_sha: brokenSha,
-      body: `Your code on commit ${brokenSha} is broken. I've gone back to commit ${safeSha} so that I didn't die because of your skill issue. Please push a new commit to fix it!`
+      body: `@${commitAuthor} Your code on commit ${brokenSha} is broken. I've gone back to commit ${safeSha} so that I didn't die because of your skill issue. Please push a new commit to fix it!`
     });
   }
   
@@ -1957,14 +1967,15 @@ export default (app) => {
       if (Object.keys(reviews).length > 0) { 
       }
     }
-
+    const commit = context.payload.head_commit;
+    const commitAuthor = commit.author.name;
     if (isBusy) {
       app.log.info("NO UPDAT");
       await context.octokit.rest.repos.createCommitComment({
         owner: context.repo().owner,
         repo: context.repo().repo,
         commit_sha: commitSha,
-        body: "Hi! I have acknowledged your commit, but I'm currently busy with other tasks. I'll update myself later when I'm done! 🛠️"
+        body: `Hi @${commitAuthor}! I have acknowledged your commit, but I'm currently busy with other tasks. I'll update myself later when I'm done! 🛠️`
       });
       return;
     } else { 
@@ -1972,7 +1983,7 @@ export default (app) => {
         owner: context.repo().owner,
         repo: context.repo().repo,
         commit_sha: commitSha,
-        body: "I have acknowledged your commit. Assuming this doesn't break me, I'll restart myself with the new changes. If it does, then skill issue."
+        body: `@${commitAuthor} I have acknowledged your commit. Assuming this doesn't break me, I'll restart myself with the new changes. If it does, then skill issue.`
       }); 
       setTimeout(() => {
          process.exit(0); 
