@@ -1996,7 +1996,4 @@ export default (app) => {
     handleWorkflowCompleted(context, app);
   });
 
-  app.on("pull_request_review_comment.created", async (context) => {
-    handleReviewCommentReply(context, app);
-  });
-};
+rwtp[4tp[]rptve[]rtpce[]v]r3//2/3/4***
