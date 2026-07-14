@@ -4,7 +4,7 @@ import fs from 'fs';
 function startBoxy() {
   console.log("boxy start"); 
   const boxy = spawn('pnpm', ['start'], { stdio: 'inherit', shell: true }); 
-
+  
   boxy.on('close', (code) => {
     if (code === 0) {
       console.log("new code got");
