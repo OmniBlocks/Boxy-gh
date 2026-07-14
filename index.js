@@ -51,7 +51,7 @@ await fs.unlink(REVERT_FILE);
 
 } catch (err) {
   if (err.code !== "ENOENT") {
-    app.log.error("good news");
+    app.log.error("good news", err);
   }
 }
 }
