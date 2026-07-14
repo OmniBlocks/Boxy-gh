@@ -2,21 +2,22 @@ import { spawn, execSync } from 'child_process';
 import fs from 'fs';
 
 function startBoxy() {
-  console.log("Starting Boxy..."); 
-  const boxy = spawn('pnpm', ['start'], { stdio: 'inherit' }); 
+  console.log("boxy start"); 
+  const boxy = spawn('pnpm', ['start'], { stdio: 'inherit', shell: true }); 
 
   boxy.on('close', (code) => {
     if (code === 0) {
-      console.log("downlodoing new code");
+      console.log("new code got");
       try { 
         execSync('git fetch --all');
-        execSync('git reset --hard origin/main');
+        execSync('git reset --hard origin/main'); 
+        execSync('pnpm install'); // just in case but i hope pnpm doesnt' pull some garbage mess this up
       } catch (err) {
         console.error("Failed to pull latest code:", err.message);
       }
       startBoxy(); 
     } else {
-      console.log(`boxy crashed`);
+      console.log(`Boxy crashed with code ${code}!`);
       try {
         const brokenSha = execSync('git rev-parse HEAD').toString().trim();
          
@@ -24,10 +25,12 @@ function startBoxy() {
         
         const safeSha = execSync('git rev-parse HEAD').toString().trim(); 
         fs.writeFileSync('./boxy_revert_pending.json', JSON.stringify({ brokenSha, safeSha }));
-        console.log(`reverted to ${safeSha}`);
+        console.log(`Reverted to ${safeSha}`);
       } catch (err) {
         console.error("I AM A FAILURE", err.message);
       } 
+       
+      startBoxy();
     }
   });
 }
