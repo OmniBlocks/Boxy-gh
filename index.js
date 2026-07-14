@@ -1984,8 +1984,8 @@ export default (app) => {
         repo: context.repo().repo,
         commit_sha: commitSha,
         body: `@${commitAuthor} I have acknowledged your commit. Assuming this doesn't break me, I'll restart myself with the new changes. If it does, then skill issue.`
-      }); 
-      
+      })
+
       setTimeout(() => {
          process.exit(0); 
       }, 2000);
