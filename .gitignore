@@ -1,0 +1,14 @@
+node_modules
+npm-debug.log
+*.pem
+!mock-cert.pem
+.env
+coverage
+lib
+.env.example
+
+boxy_notebook.json
+boxy_reviews.json
+boxy_sticky_notes.json
+boxy_todo_list.json
+boxy_revert_pending.json
