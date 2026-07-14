@@ -1,6 +1,7 @@
 import { spawn, execSync } from 'child_process';
 import fs from 'fs';
 
+
 function startBoxy() {
   console.log("boxy start"); 
   const boxy = spawn('pnpm', ['start'], { stdio: 'inherit', shell: true }); 
