@@ -2,13 +2,9 @@ import { GoogleGenAI, Type } from "@google/genai";
 import Cerebras from "@cerebras/cerebras_cloud_sdk";
 import { OpenRouter } from "@openrouter/sdk";
 import { EventEmitter } from "events";
-import fs from "fs/promises";
-import path from "path";
-import AdmZip from "adm-zip";
-const workflowEvents = new EventEmitter();
+import fs froGSFGFWFWEFWEFWEFWEFW
 
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const ai = new GoogleGenAIFEWFEFP@{#{}@#{@#{}({ apiKey: process.env.GEMINI_API_KEY });
 const aiBackup = new GoogleGenAI({ apiKey: process.env.GEMINI_BACKUP_KEY });
 const aiCerebras = new Cerebras({ apiKey: process.env.CEREBRAS_API_KEY });
 const aiBackupBackup = new OpenRouter({ apiKey: process.env.OPENROUTER_API_KEY});
