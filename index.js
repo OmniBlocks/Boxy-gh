@@ -27,18 +27,19 @@ try {
   const { data: installations } = await octopus.rest.apps.listInstallations();
   const firstInstallation = installations[0];
 
-  const commit = await octopus.rest.repos.getCommit({
-    owner: "OmniBlocks",
-    repo: "Boxy-gh",
-    ref: brokenSha
-  });
-  const commitAuthor = commit.data.author?.login;
+ 
 
 
 
 
   if (firstInstallation) {
     const octokit = await app.auth(firstInstallation.id);
+     const commit = await octokit.rest.repos.getCommit({
+    owner: "OmniBlocks",
+    repo: "Boxy-gh",
+    ref: brokenSha
+  });
+  const commitAuthor = commit.data.author?.login;
     await octokit.rest.repos.createCommitComment({
       owner: "OmniBlocks",
       repo: "Boxy-gh",
@@ -1996,4 +1997,7 @@ export default (app) => {
     handleWorkflowCompleted(context, app);
   });
 
-rwtp[4tp[]rptve[]rtpce[]v]r3//2/3/4***
+  app.on("pull_request_review_comment.created", async (context) => {
+    handleReviewCommentReply(context, app);
+  });
+};
