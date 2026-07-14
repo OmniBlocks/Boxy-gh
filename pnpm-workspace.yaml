@@ -1,0 +1,4 @@
+allowBuilds:
+  '@google/genai': true
+  '@openrouter/sdk': true
+  protobufjs: true
