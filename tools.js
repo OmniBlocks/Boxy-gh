@@ -182,6 +182,34 @@ const finishPrReviewDeclaration = {
     required: ["pull_number", "event", "body"]
   }
 };
+const reactCommentDeclaration = {
+  name: "react_comment",
+  description: "React to an issue comment.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      comment_id: { 
+        type: Type.INTEGER, 
+        description: "The unique identifier of the comment to react to." 
+      },
+      reaction: { 
+        type: Type.STRING, 
+        enum: [
+          "+1",
+          "-1",
+          "laugh",
+          "confused",
+          "heart",
+          "hooray",
+          "rocket",
+          "eyes"
+        ],
+        description: "The reaction type to add."
+      },
+    },
+    required: ["comment_id", "reaction"],
+  }
+};
 export const boxyReviewTools = [
   readMemoryDeclaration, saveMemoryDeclaration, searchCodeDeclaration, readFileDeclaration,
   getPrDiffDeclaration, updatePrSummaryDeclaration, createInlineCommentDeclaration, finishPrReviewDeclaration
@@ -195,7 +223,8 @@ export const boxyWebhookTools = [
   saveStickyNoteDeclaration,
   closeOrOpenIssueDeclaration,
   labelIssueDeclaration,
-  saveTodoListItemDeclaration
+  saveTodoListItemDeclaration,
+  reactCommentDeclaration
 ];
 export const boxyBackgroundTools = [
   readMemoryDeclaration,
@@ -450,7 +479,22 @@ export async function executeTool(call, context, app) {
       }
 
       toolResult = { status: "review_completed" };
-    } else {
+    } else if (call.name === "react_comment") {
+      const { comment_id, reaction } = call.args;
+      
+      const { data } = await context.octokit.rest.reactions.createForIssueComment({
+        owner,
+        repo,
+        comment_id,
+        content: reaction // GitHub API uses 'content' for the reaction string
+      });
+
+      toolResult = { 
+        status: "success", 
+        message: `Successfully reacted with '${reaction}' to comment ${comment_id}.`,
+        reaction_id: data.id 
+      };
+    }else {
       toolResult = { error: "Tool does not exist" };
     }
   } catch (err) {
