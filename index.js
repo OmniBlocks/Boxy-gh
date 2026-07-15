@@ -270,8 +270,7 @@ const isComment = context.name === "issue_comment";
         sayThingyThingy = `in a new created issue (which means you need to triage it)`;
       }
 
-      conversationHistory += `\n Triggered by: ${author} repo role: (${authorRole}) ${sayThingyThingy}.\n\n`;
- 
+      conversationHistory += `[User: ${c.user.login} | Comment ID: ${c.id}]: ${c.body}\n---\n`; 
       const notebook = await loadNotebook();
       const memoryTitles = Object.keys(notebook);
       const tableOfContents = memoryTitles.length > 0 
