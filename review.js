@@ -14,7 +14,7 @@ export async function triggerCodeReview(context, app) {
 
   let boxyComment = comments.find(c => c.user.login === "boxycpu[bot]" && c.body.includes("<!-- BOXY REVIEW COMMENT -->"));
 
-  const commentBody = `# Code Review Started!\nHi, @${author}! I'll get started on reviewing this PR.  Once finished, I'll update this comment with a full summary and post inline comments!<!-- BOXY REVIEW COMMENT -->`;
+  const commentBody = `# Code Review Started!\nHi, @${author}! I'll get started on reviewing this PR.  Once finished, I'll update this comment with my full review!<!-- BOXY REVIEW COMMENT -->`;
 
   let commentId;
   if (boxyComment) {
@@ -150,6 +150,7 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
        - Then a Mermaid chart showing the logic flow.
        - Then, a short poem from your perspective (Boxy) about the PR. The poem should be in quote blocks like >
        - Finally, the screenshots under a heading exactly called "### GUI Screenshots". If there are no screenshots, this means the tests found no changes in the GUI (or broke the build).
+       - (optional) Slop and Spam detection: If you feel that the PR is slop or spam (such as the pr title/description and diff making absolutely no sense) you can make an optional heading called Slop Detected and explain your reasoning wrapped in a [!WARNING] markdown block.
     4. Post inline review comments using 'create_inline_comment'. You must use the exact 'path' and 'line' (new line number) from the diff. You can specify a single line, or comment on a range of lines by passing both 'start_line' and 'line'. You may post comments, may include opinionated ones such as design choices and other stufff. You can also make suggestions. When you want to propose a code change, you can use a suggestion markdown codeblock. Like when making code blocks, instead of any specific language, the first line must be three backticks followed by the word 'suggestion', and the entire block of code (using the range or line you provided for the inline comment) with the change you wanted to propose. However, you must still add context about this, so never just give a suggestion without explaining it. Suggestions are not mandatory in the sense that you can just... not do it, but it's highly encouraged for any type of change you want.
     5. Finally, use 'finish_pr_review' with APPROVE, REQUEST_CHANGES, or COMMENT to submit your final decision. When you do this, include a shorter summary of your findings with the main things that need to be changed, since you already gave the detailed summary with 'update_pr_summary'. With this tool, instead of summarizing what the PR does or changes, this is your time to give what actually needs to change among other things. Basically, just don't repeat what you already said in the main summary. Also ping the pr author with a @mention. 
 
