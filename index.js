@@ -212,60 +212,91 @@ async function startBackgroundQueue(app) {
 
 
 async function boxyCommentorIssue(context, app) {
-  app.log.info("working...")
-const isComment = context.name === "issue_comment";
-       
-      const author = isComment 
-        ? context.payload.comment.user.login 
-        : context.payload.issue.user.login;
-        
-      const authorType = isComment 
-        ? context.payload.comment.user.type 
-        : context.payload.issue.user.type;
+  app.log.info("working...");
 
-      const authorRole = isComment 
-        ? context.payload.comment.author_association 
-        : context.payload.issue.author_association;
+  const isDiscussion = context.name === "discussion_comment";
+  const isIssueComment = context.name === "issue_comment";
+  const isComment = isIssueComment || isDiscussion;
+  const mentionHandle = "@OmniBlocks/boxy";
 
-      const textBody = isComment 
-        ? context.payload.comment.body 
-        : context.payload.issue.body || "";
- 
-      if (authorType === "Bot" || author.includes("[bot]")) {
-        return;
-      }
+  const author = isComment
+    ? context.payload.comment.user.login
+    : context.payload.issue.user.login;
 
-      const mentionHandle = "@OmniBlocks/boxy";
+  const authorType = isComment
+    ? context.payload.comment.user.type
+    : context.payload.issue.user.type;
 
-    if (!textBody.includes(mentionHandle) && isComment) return; 
+  const authorRole = isComment
+    ? context.payload.comment.author_association
+    : context.payload.issue.author_association;
 
-    const cleanedComment = textBody.replace(/[.,#!$%\^&\*;:{}=\-_`~?]/g, "").trim();
-    if (cleanedComment === mentionHandle) { 
-      return await context.octokit.rest.issues.createComment(context.issue({ body: "Yeah?" }));
+  const textBody = isComment
+    ? context.payload.comment.body
+    : context.payload.issue.body || "";
+
+  if (authorType === "Bot" || author.includes("[bot]")) {
+    return;
+  }
+
+  if (!textBody.includes(mentionHandle) && isComment) return;
+
+  const cleanedComment = textBody.replace(/[.,#!$%\^&\*;:{}=\-_`~?]/g, "").trim();
+  if (cleanedComment === mentionHandle) {
+    const repo = context.repo();
+    if (isDiscussion) {
+      return await context.octokit.rest.discussions.createComment({
+        owner: repo.owner,
+        repo: repo.repo,
+        discussion_number: context.payload.discussion.number,
+        body: "Yeah?"
+      });
     }
 
+    return await context.octokit.rest.issues.createComment({
+      owner: repo.owner,
+      repo: repo.repo,
+      issue_number: context.payload.issue.number,
+      body: "Yeah?"
+    });
+  }
+
     try {
-      const issue = context.payload.issue;
+      const isDiscussion = context.name === "discussion_comment";
+      const issue = isDiscussion ? context.payload.discussion : context.payload.issue;
       const issueNum = issue.number;
-      let conversationHistory = `=== ORIGINAL ISSUE DESCRIPTION ===\nTitle: ${issue.title}\nIssue Number: ${issueNum}\nAuthor: ${issue.user.login}\nBody:\n${issue.body || "No description provided."}\n\n`;
+      const issueBody = isDiscussion
+        ? issue.body || issue.bodyHTML || "No description provided."
+        : issue.body || "No description provided.";
+
+      let conversationHistory = `=== ORIGINAL ${isDiscussion ? "DISCUSSION" : "ISSUE"} DESCRIPTION ===\nTitle: ${issue.title}\n${isDiscussion ? "Discussion" : "Issue"} Number: ${issueNum}\nAuthor: ${issue.user.login}\nBody:\n${issueBody}\n\n`;
 
       const comments = await context.octokit.paginate(
-        context.octokit.rest.issues.listComments,
-        {
-          owner: context.repo().owner,
-          repo: context.repo().repo,
-          issue_number: issue.number,
-          per_page: 600
-        }
+        isDiscussion
+          ? context.octokit.rest.discussions.listComments
+          : context.octokit.rest.issues.listComments,
+        isDiscussion
+          ? {
+              owner: context.repo().owner,
+              repo: context.repo().repo,
+              discussion_number: issue.number,
+              per_page: 600
+            }
+          : {
+              owner: context.repo().owner,
+              repo: context.repo().repo,
+              issue_number: issue.number,
+              per_page: 600
+            }
       );
 
       conversationHistory += "=== CONVERSATION LOG ===\n";
       for (const c of comments) {
         conversationHistory += `[User: ${c.user.login} | Comment ID: ${c.id}]: ${c.body}\n---\n`; 
       }
-      let sayThingyThingy = ""
+      let sayThingyThingy = "";
       if (isComment) {
-        sayThingyThingy = `in a new comment on this issue`;
+        sayThingyThingy = `in a new comment on this ${isDiscussion ? "discussion" : "issue"}`;
       } else {
         sayThingyThingy = `in a new created issue (which means you need to triage it)`;
       }
@@ -384,7 +415,23 @@ const isComment = context.name === "issue_comment";
         throw new Error(`Boxy broke reason: ${finishReason}\n Full API Response: ${JSON.stringify(response)}\n\n`);
       }
       app.log.info(response.text);
-      return await context.octokit.rest.issues.createComment(context.issue({ body: response.text }));
+
+      const repo = context.repo();
+      if (context.name === "discussion_comment") {
+        return await context.octokit.rest.discussions.createComment({
+          owner: repo.owner,
+          repo: repo.repo,
+          discussion_number: context.payload.discussion.number,
+          body: response.text
+        });
+      }
+
+      return await context.octokit.rest.issues.createComment({
+        owner: repo.owner,
+        repo: repo.repo,
+        issue_number: context.payload.issue.number,
+        body: response.text
+      });
       
     } catch (error) {
       app.log.error("ERROR inside processing block:", error);
@@ -423,7 +470,7 @@ export default (app) => {
   startBackgroundQueue(app);
   complainIfSkillIssue(app);
 
-  app.on(["issue_comment.created", "issues.opened"], async (context) => {
+  app.on(["issue_comment.created", "discussion_comment.created", "issues.opened"], async (context) => {
     boxyCommentorIssue(context, app);
     return;
   });

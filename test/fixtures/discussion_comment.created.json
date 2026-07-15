@@ -1,0 +1,26 @@
+{
+  "action": "created",
+  "repository": {
+    "name": "testing-things",
+    "owner": {
+      "login": "hiimbex"
+    }
+  },
+  "discussion": {
+    "number": 1,
+    "title": "Test discussion",
+    "body": "This is a discussion body.",
+    "user": {
+      "login": "discussion-author"
+    }
+  },
+  "comment": {
+    "body": "@OmniBlocks/boxy do you follow discussions?",
+    "user": {
+      "login": "commenter",
+      "type": "User"
+    },
+    "author_association": "NONE",
+    "id": 101
+  }
+}
