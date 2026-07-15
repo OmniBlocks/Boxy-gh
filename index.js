@@ -261,7 +261,7 @@ const isComment = context.name === "issue_comment";
 
       conversationHistory += "=== CONVERSATION LOG ===\n";
       for (const c of comments) {
-        conversationHistory += `[User: ${c.user.login}]: ${c.body}\n---\n`;
+        conversationHistory += `[User: ${c.user.login} | Comment ID: ${c.id}]: ${c.body}\n---\n`; 
       }
       let sayThingyThingy = ""
       if (isComment) {
@@ -270,7 +270,8 @@ const isComment = context.name === "issue_comment";
         sayThingyThingy = `in a new created issue (which means you need to triage it)`;
       }
 
-      conversationHistory += `[User: ${c.user.login} | Comment ID: ${c.id}]: ${c.body}\n---\n`; 
+      conversationHistory += `\n Triggered by: ${author} repo role: (${authorRole}) ${sayThingyThingy}.\n\n`;
+ 
       const notebook = await loadNotebook();
       const memoryTitles = Object.keys(notebook);
       const tableOfContents = memoryTitles.length > 0 
