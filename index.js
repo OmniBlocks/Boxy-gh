@@ -544,80 +544,7 @@ async function boxyCommentorIssue(context, app) {
     }
 }
 
-async function generatePRSummary(context, app) {
-  try {
-    const pr = context.payload.pull_request;
-    const prNumber = pr.number;
-    const repo = context.repo();
 
-    app.log.info(`Generating summary for PR #${prNumber}`);
-
-    // Fetch changed files
-    const files = await context.octokit.rest.pulls.listFiles({
-      owner: repo.owner,
-      repo: repo.repo,
-      pull_number: prNumber,
-      per_page: 30
-    });
-
-    let fileChangesContext = "";
-    if (files.data && files.data.length > 0) {
-      fileChangesContext = "## Changed Files:\n";
-      const lockFilePatterns = /package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock/i;
-      
-      for (const file of files.data.slice(0, 15)) {
-        // Skip lock files and binary files
-        if (lockFilePatterns.test(file.filename) || file.status === "deleted" && file.patch === undefined) {
-          continue;
-        }
-        
-        fileChangesContext += `- \`${file.filename}\` (${file.changes} changes, status: ${file.status})\n`;
-        if (file.patch) {
-          fileChangesContext += "```diff\n" + file.patch.slice(0, 500) + (file.patch.length > 500 ? "\n...(truncated)" : "") + "\n```\n";
-        }
-      }
-    }
-
-    const systemPrompt = `You are Boxy, an automated assistant for the OmniBlocks repository. 
-    You have been asked to generate a brief summary of a pull request. 
-    Analyze the PR title, description, and code changes, then provide a concise summary of what this PR does, its purpose, and key changes in 2-3 sentences.
-    Keep it friendly and informative, not overly technical.
-    
-    PR Title: ${pr.title}
-    PR Description: ${pr.body || "No description provided."}
-    
-    ${fileChangesContext}
-    `;
-
-    let conversationTurns = [{ role: "user", parts: [{ text: systemPrompt }] }];
-
-    const response = await callAIWithFallback({
-      ai,
-      contents: conversationTurns,
-      tools: [],
-      appLog: app.log
-    });
-
-    if (!response.text) {
-      app.log.warn(`No summary generated for PR #${prNumber}`);
-      return;
-    }
-
-    const summaryComment = `# Summary by Boxy\n\n${response.text}`;
-
-    await context.octokit.rest.pulls.createReview({
-      owner: repo.owner,
-      repo: repo.repo,
-      pull_number: prNumber,
-      body: summaryComment,
-      event: "COMMENT"
-    });
-
-    app.log.info(`Posted summary for PR #${prNumber}`);
-  } catch (error) {
-    app.log.error("Error generating PR summary:", error.message);
-  }
-}
 
 /**
  * @param {import('probot').Probot} app
@@ -632,9 +559,7 @@ export default (app) => {
   });
 
   app.on(["pull_request.opened", "pull_request.synchronize", "pull_request.reopened"], async (context) => {
-    if (context.payload.action === "opened") {
-      generatePRSummary(context, app);
-    }
+   
     triggerCodeReview(context, app);
   });
   
