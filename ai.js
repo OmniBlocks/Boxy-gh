@@ -7,6 +7,7 @@ export const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 export const aiBackup = new GoogleGenAI({ apiKey: process.env.GEMINI_BACKUP_KEY });
 export const aiCerebras = new Cerebras({ apiKey: process.env.CEREBRAS_API_KEY });
 export const aiBackupBackup = new OpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
+
 export function throwIfEmptyModelResponse(text, providerName) {
   if (!text || !text.trim()) {
     throw new Error(`${providerName} returned an empty response`);
