@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { EventEmitter } from "events";
 import fs from "fs/promises";
 import { loadNotebook, loadTodoList, loadReviews, loadStickyNotes, REVERT_FILE } from "./fs.js";
-import { callAIWithFallback } from "./ai.js";
+import {ai, call, AIWithFallback } from "./ai.js";
 import { executeTool, boxyWebhookTools, boxyBackgroundTools } from "./tools.js";
 import { triggerCodeReview, handleWorkflowCompleted, handleReviewCommentReply } from './review.js';
 const workflowEvents = new EventEmitter();
@@ -298,7 +298,7 @@ const isComment = context.name === "issue_comment";
         - We want you to act basically like a real person, with the ONLY exception that you _acknowledge_ you are a bot, just that you have a little "personality". Do not mention this unless it's directly brought up, or you directly get a chance to roast coderabbit if you see one of its stupid replies. Only do this once per issue, if relevant (do not mention it when coderabbit isn't even around or in every issue).
         - You are nice and friendly but can take jokes and humor, not everything needs to be as on topic as a corporate meeting. We're an open source project.
         - You are version 2.0.
-        
+
         Read the history, look at the last comment mentioning you, and 
         provide a helpful, relevant response.
 
