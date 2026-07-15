@@ -82,6 +82,95 @@ export async function issueCloseOrOpen(context, state, state_reason = null) {
   }
 }
 
+async function replyToDiscussionComment(octokit, { owner, repo, discussion_comment_id, discussion_comment_node_id, discussion_node_id, body }) {
+  if (octokit.graphql && discussion_node_id) {
+    const input = {
+      discussionId: discussion_node_id,
+      body
+    };
+    if (discussion_comment_node_id) {
+      input.replyToId = discussion_comment_node_id;
+    }
+
+    return await octokit.graphql(
+      `mutation AddDiscussionComment($input: AddDiscussionCommentInput!) {
+        addDiscussionComment(input: $input) {
+          comment {
+            id
+            body
+          }
+        }
+      }`,
+      { input }
+    );
+  }
+
+  if (octokit.rest?.discussions?.createReply) {
+    return await octokit.rest.discussions.createReply({ owner, repo, discussion_comment_id, body });
+  }
+
+  return await octokit.request(
+    "POST /repos/{owner}/{repo}/discussions/comments/{discussion_comment_id}/replies",
+    { owner, repo, discussion_comment_id, body }
+  );
+}
+
+async function listConversationComments(octokit, { owner, repo, isDiscussion, discussion_number, issue_number }) {
+  if (isDiscussion) {
+    if (octokit.rest?.discussions?.listComments) {
+      return await octokit.paginate(octokit.rest.discussions.listComments, {
+        owner,
+        repo,
+        discussion_number,
+        per_page: 600
+      });
+    }
+
+    return await octokit.paginate(
+      "GET /repos/{owner}/{repo}/discussions/{discussion_number}/comments",
+      {
+        owner,
+        repo,
+        discussion_number,
+        per_page: 600
+      }
+    );
+  }
+
+  return await octokit.paginate(octokit.rest.issues.listComments, {
+    owner,
+    repo,
+    issue_number,
+    per_page: 600
+  });
+}
+
+async function createCommentForContext(context, body) {
+  const repo = context.repo();
+  if (context.name === "discussion_comment") {
+    return await replyToDiscussionComment(context.octokit, {
+      owner: repo.owner,
+      repo: repo.repo,
+      discussion_comment_id: context.payload.comment.id,
+      discussion_comment_node_id: context.payload.comment.node_id,
+      discussion_node_id: context.payload.discussion?.node_id || context.payload.comment.node_id,
+      body
+    });
+  }
+
+  const issueNumber = context.payload.issue?.number || context.payload.issue_number;
+  if (!issueNumber) {
+    throw new Error("Missing issue_number for createCommentForContext");
+  }
+
+  return await context.octokit.rest.issues.createComment({
+    owner: repo.owner,
+    repo: repo.repo,
+    issue_number: issueNumber,
+    body
+  });
+}
+
 async function startBackgroundQueue(app) {
   app.log.info("Boxy background list start! (read this in the tone of a mario party narrator)");
 
@@ -245,10 +334,12 @@ async function boxyCommentorIssue(context, app) {
   if (cleanedComment === mentionHandle) {
     const repo = context.repo();
     if (isDiscussion) {
-      return await context.octokit.rest.discussions.createReply({
+      return await replyToDiscussionComment(context.octokit, {
         owner: repo.owner,
         repo: repo.repo,
         discussion_comment_id: context.payload.comment.id,
+        discussion_comment_node_id: context.payload.comment.node_id,
+        discussion_node_id: context.payload.discussion?.node_id || context.payload.comment.node_id,
         body: "Yeah?"
       });
     }
@@ -271,24 +362,13 @@ async function boxyCommentorIssue(context, app) {
 
       let conversationHistory = `=== ORIGINAL ${isDiscussion ? "DISCUSSION" : "ISSUE"} DESCRIPTION ===\nTitle: ${issue.title}\n${isDiscussion ? "Discussion" : "Issue"} Number: ${issueNum}\nAuthor: ${issue.user.login}\nBody:\n${issueBody}\n\n`;
 
-      const comments = await context.octokit.paginate(
-        isDiscussion
-          ? context.octokit.rest.discussions.listComments
-          : context.octokit.rest.issues.listComments,
-        isDiscussion
-          ? {
-              owner: context.repo().owner,
-              repo: context.repo().repo,
-              discussion_number: issue.number,
-              per_page: 600
-            }
-          : {
-              owner: context.repo().owner,
-              repo: context.repo().repo,
-              issue_number: issue.number,
-              per_page: 600
-            }
-      );
+      const comments = await listConversationComments(context.octokit, {
+        owner: context.repo().owner,
+        repo: context.repo().repo,
+        isDiscussion,
+        discussion_number: isDiscussion ? issue.number : undefined,
+        issue_number: !isDiscussion ? issue.number : undefined
+      });
 
       conversationHistory += "=== CONVERSATION LOG ===\n";
       for (const c of comments) {
@@ -418,49 +498,125 @@ async function boxyCommentorIssue(context, app) {
 
       const repo = context.repo();
       if (context.name === "discussion_comment") {
-        return await context.octokit.rest.discussions.createReply({
+        return await replyToDiscussionComment(context.octokit, {
           owner: repo.owner,
           repo: repo.repo,
           discussion_comment_id: context.payload.comment.id,
+          discussion_comment_node_id: context.payload.comment.node_id,
+          discussion_node_id: context.payload.discussion?.node_id || context.payload.comment.node_id,
           body: response.text
         });
       }
 
-      return await context.octokit.rest.issues.createComment({
-        owner: repo.owner,
-        repo: repo.repo,
-        issue_number: context.payload.issue.number,
-        body: response.text
-      });
+      return await createCommentForContext(context, response.text);
       
     } catch (error) {
-      app.log.error("ERROR inside processing block:", error);
+      app.log.error("ERROR inside processing block:", error.message);
       try {
-      return await context.octokit.rest.issues.createComment(context.issue({ body: "i broke 💔💔💔 error <details><summary>Error Details</summary><pre>" + (error.stack || error.message) + "</pre></details>" }));
+      return await createCommentForContext(context, "i broke 💔💔💔 error <details><summary>Error Details</summary><pre>" + (error.stack || error.message) + "</pre></details>");
       } catch (err) {
         try {
         const spicyErrorbutItsTruncated = String(error.stack || error.message).substring(0, 60000);
-        return await context.octokit.rest.issues.createComment(context.issue({ body: "# I broke SO BAD that posting the comment to post about the error also errored 💔🥀 <details><summary>Error Details</summary><pre>" + (err.stack || err.message) + "</pre><details><summary>extra error details 🌶️</summary><pre>" + spicyErrorbutItsTruncated + "</pre></details></details>" }));
+        return await createCommentForContext(context, "# I broke SO BAD that posting the comment to post about the error also errored 💔🥀 <details><summary>Error Details</summary><pre>" + (err.stack || err.message) + "</pre><details><summary>extra error details 🌶️</summary><pre>" + spicyErrorbutItsTruncated + "</pre></details></details>");
         } catch (err2) {
-          app.log.error("something is fricking broke ", err2);
+          console.error(err2)
+          app.log.error("something is fricking broke ", err2.message);
           await new Promise(resolve => setTimeout(resolve, 5000));
           // just in case stupid github is rate limitiinnig us
           try {
-          return await context.octokit.rest.issues.createComment(context.issue({ body: "i broke SO BAD THAT POSTING THE COMMENT TO POST ABOUT THE ERROR ABOUT THE COMMENT THAT WAS ABOUT THE ERROR ALSO ERRORED 💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀<details><summary>Error Details</summary><pre> lol screw error details something is clearly wrong so bad that including the error details in the comment breaks lol :trollface: go fix this or skill issue</pre></details>" }));
+          return await createCommentForContext(context, "i broke SO BAD THAT POSTING THE COMMENT TO POST ABOUT THE ERROR ABOUT THE COMMENT THAT WAS ABOUT THE ERROR ALSO ERRORED 💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀<details><summary>Error Details</summary><pre> lol screw error details something is clearly wrong so bad that including the error details in the comment breaks lol :trollface: go fix this or skill issue</pre></details>");
           
           } catch (err3) {
-            app.log.error("something is LITERALLY broke ", err3);
+            app.log.error("something is LITERALLY broke ", err3.message);
             await new Promise(resolve => setTimeout(resolve, 5000));
             try {
-            return await context.octokit.rest.issues.createComment(context.issue({ body: "everything broke" }));
+            return await createCommentForContext(context, "everything broke");
           }
             catch (err4) {
-              app.log.error("something is LITERALLY LITERALLY broke ", err4);
+              app.log.error("something is LITERALLY LITERALLY broke ", err4.message);
+              // since teh stupid probot logger doesn't work just make it log to a file instead
+              await fs.appendFile("boxy_error_log.txt", `\n\n${new Date().toISOString()} - something is LITERALLY LITERALLY broke: ${err4.stack || err4.message}\n other error logs: {error1: ${error.stack || error.message}, error2: ${err.stack || err.message}, error3: ${err2.stack || err2.message}, error4: ${err3.stack || err3.message}\n\n}`);
+
             }
           }
         }
       }
     }
+}
+
+async function generatePRSummary(context, app) {
+  try {
+    const pr = context.payload.pull_request;
+    const prNumber = pr.number;
+    const repo = context.repo();
+
+    app.log.info(`Generating summary for PR #${prNumber}`);
+
+    // Fetch changed files
+    const files = await context.octokit.rest.pulls.listFiles({
+      owner: repo.owner,
+      repo: repo.repo,
+      pull_number: prNumber,
+      per_page: 30
+    });
+
+    let fileChangesContext = "";
+    if (files.data && files.data.length > 0) {
+      fileChangesContext = "## Changed Files:\n";
+      const lockFilePatterns = /package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock/i;
+      
+      for (const file of files.data.slice(0, 15)) {
+        // Skip lock files and binary files
+        if (lockFilePatterns.test(file.filename) || file.status === "deleted" && file.patch === undefined) {
+          continue;
+        }
+        
+        fileChangesContext += `- \`${file.filename}\` (${file.changes} changes, status: ${file.status})\n`;
+        if (file.patch) {
+          fileChangesContext += "```diff\n" + file.patch.slice(0, 500) + (file.patch.length > 500 ? "\n...(truncated)" : "") + "\n```\n";
+        }
+      }
+    }
+
+    const systemPrompt = `You are Boxy, an automated assistant for the OmniBlocks repository. 
+    You have been asked to generate a brief summary of a pull request. 
+    Analyze the PR title, description, and code changes, then provide a concise summary of what this PR does, its purpose, and key changes in 2-3 sentences.
+    Keep it friendly and informative, not overly technical.
+    
+    PR Title: ${pr.title}
+    PR Description: ${pr.body || "No description provided."}
+    
+    ${fileChangesContext}
+    `;
+
+    let conversationTurns = [{ role: "user", parts: [{ text: systemPrompt }] }];
+
+    const response = await callAIWithFallback({
+      ai,
+      contents: conversationTurns,
+      tools: [],
+      appLog: app.log
+    });
+
+    if (!response.text) {
+      app.log.warn(`No summary generated for PR #${prNumber}`);
+      return;
+    }
+
+    const summaryComment = `# Summary by Boxy\n\n${response.text}`;
+
+    await context.octokit.rest.pulls.createReview({
+      owner: repo.owner,
+      repo: repo.repo,
+      pull_number: prNumber,
+      body: summaryComment,
+      event: "COMMENT"
+    });
+
+    app.log.info(`Posted summary for PR #${prNumber}`);
+  } catch (error) {
+    app.log.error("Error generating PR summary:", error.message);
+  }
 }
 
 /**
@@ -476,11 +632,18 @@ export default (app) => {
   });
 
   app.on(["pull_request.opened", "pull_request.synchronize", "pull_request.reopened"], async (context) => {
+    if (context.payload.action === "opened") {
+      generatePRSummary(context, app);
+    }
     triggerCodeReview(context, app);
   });
   
   app.on("push", async (context) => {
-    const commitSha = context.payload.head_commit.id;
+     // has to be on repo called "Boxy-gh" not the monorepo cuz the is difeernte
+    if (context.payload.repository.name !== "Boxy-gh") {
+//      app.log.info(`not on Boxy-gh repo, so not doing anything : ${context.payload.repository.name}`);
+      return;
+    }    const commitSha = context.payload.head_commit.id;
     const branch = context.payload.ref.replace("refs/heads/", "");
     
     if (branch !== "main") {
@@ -488,11 +651,7 @@ export default (app) => {
       return;
     }
  
-     // has to be on repo called "Boxy-gh" not the monorepo cuz the is difeernte
-    if (context.payload.repository.name !== "Boxy-gh") {
-      app.log.info(`not on Boxy-gh repo, so not doing anything : ${context.payload.repository.name}`);
-      return;
-    }
+
 
     // we don't want boxy to update itself when it's busy so we have to trackkkkk when its like pending updatse
 
