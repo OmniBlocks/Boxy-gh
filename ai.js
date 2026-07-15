@@ -81,11 +81,6 @@ export function formatGoogleCommentText(parts, elapsedSeconds) {
   return answerText ? `${details}\n\n${answerText}` : details;
 }
 export async function callAIWithFallback({ ai, contents, tools, appLog }) {
-        return {
-          functionCalls: [],
-          candidates: [],
-          text: "The end of Boxy"
-        };
   const providers = [
     { name: "gemini-3.1-flash-lite", type: "google", model: "gemini-3.1-flash-lite", useBackup: false },
     { name: "gemini-3.5-flash", type: "google", model: "gemini-3.5-flash", useBackup: false },
