@@ -1,5 +1,5 @@
 import AdmZip from 'adm-zip';
-import { callAIWithFallback } from './ai.js';
+import { ai, callAIWithFallback } from './ai.js';
 import { loadReviews, saveReviews, loadNotebook, loadTodoList, loadStickyNotes } from './fs.js';
 import { boxyReviewTools, executeTool, boxyWebhookTools } from './tools.js';
 
