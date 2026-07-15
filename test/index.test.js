@@ -8,6 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 // Requiring our fixtures
 import payload from "./fixtures/issues.opened.json" with { type: "json" };
+import discussionCommentPayload from "./fixtures/discussion_comment.created.json" with { type: "json" };
 
 import { describe, beforeEach, afterEach, test } from "node:test";
 import assert from "node:assert";
@@ -58,6 +59,29 @@ describe("My Probot app", () => {
 
     // Receive a webhook event
     await probot.receive({ name: "issues", payload });
+
+    assert.deepStrictEqual(mock.pendingMocks(), []);
+  });
+
+  test("creates a discussion reply when a discussion comment mentions the bot", async () => {
+    const mock = nock("https://api.github.com")
+      .post("/app/installations/2/access_tokens")
+      .reply(200, {
+        token: "test",
+        permissions: {
+          issues: "write",
+        },
+      })
+      .get("/repos/hiimbex/testing-things/discussions/1/comments")
+      .query({ per_page: "600" })
+      .reply(200, [])
+      .post("/repos/hiimbex/testing-things/discussions/1/comments", (body) => {
+        assert.ok(body.body.includes("@OmniBlocks/boxy") || body.body.length > 0);
+        return true;
+      })
+      .reply(200);
+
+    await probot.receive({ name: "discussion_comment", payload: discussionCommentPayload });
 
     assert.deepStrictEqual(mock.pendingMocks(), []);
   });
