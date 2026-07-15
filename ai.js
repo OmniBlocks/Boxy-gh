@@ -1,7 +1,7 @@
 import Cerebras from "@cerebras/cerebras_cloud_sdk";
 import { GoogleGenAI } from "@google/genai";
 import { OpenRouter } from "@openrouter/sdk";
-import { convertContentsToMessages } from "./index.js";
+import { convertContentsToMessages } from './review.js';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 export const aiBackup = new GoogleGenAI({ apiKey: process.env.GEMINI_BACKUP_KEY });
