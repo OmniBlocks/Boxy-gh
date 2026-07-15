@@ -89,6 +89,7 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
     { name: "gemini-3.1-flash-lite-backup", type: "google", model: "gemini-3.1-flash-lite", useBackup: true },
     { name: "gemini-3.5-flash-backup", type: "google", model: "gemini-3.5-flash", useBackup: true },
     { name: "gemma-4-26b-a4b-it-backup", type: "google", model: "gemma-4-26b-a4b-it", useBackup: true },
+    { name: "command-a-plus-05-2026", type: "cohere", model: "command-a-plus-05-2026", useBackup: false },
     { name: "openrouter-nemotron-3-super", type: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
     { name: "openrouter-qwen-coder", type: "openrouter", model: "qwen/qwen3-coder:free" },
     { name: "openrouter-gemma-4-31b-a4b-it", type: "openrouter", model: "google/gemma-4-31b-it:free" },
@@ -195,7 +196,7 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
               }
             }
           ],
-          text: "formattedText"
+          text: formattedText
         };
       }
 
@@ -236,7 +237,129 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
           ],
           text: formattedText
         };
+      } 
+
+      if (provider.type === "cohere") {
+        if (!process.env.COHERE_API_KEY) {
+          continue;
+        }
+
+        // wait 2 seconds because stupid cohere key has more rate limits if more tools stuff idk
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        const messages = convertContentsToMessages(contents);
+        const body = {
+          model: provider.model,
+          messages: messages
+        };
+
+        // Format tools the OpenAI way utilizing the endpoint's strict compatibility
+        if (tools && tools.length > 0) {
+          body.tools = tools.map(t => {
+            const props = {};
+            for (const [k, v] of Object.entries(t.parameters?.properties || {})) {
+              props[k] = { ...v };
+              if (typeof props[k].type === 'string') {
+                props[k].type = props[k].type.toLowerCase();
+              }
+              if (props[k].items && typeof props[k].items.type === 'string') {
+                props[k].items = { ...props[k].items, type: props[k].items.type.toLowerCase() };
+              }
+            }
+            return {
+              type: "function",
+              function: {
+                name: t.name,
+                description: t.description || "",
+                parameters: {
+                  type: "object",
+                  properties: props,
+                  required: t.parameters?.required || []
+                }
+              }
+            };
+          });
+          body.tool_choice = "auto";
+        }
+
+        const headers = {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.COHERE_API_KEY}`
+        };
+
+        const res = await fetch("https://api.cohere.ai/compatibility/v1/chat/completions", {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body)
+        });
+
+        if (!res.ok) {
+          throw new Error(`Cohere Status ${res.status}: ${await res.text()}`);
+        }
+
+        const data = await res.json();
+        const choice = data.choices?.[0];
+        const message = choice?.message;
+
+        if (!message) {
+          throw new Error("Empty choice content received from Cohere API");
+        }
+
+        const text = message.content || "";
+        const functionCalls = [];
+        const parts = [];
+
+        // Parse tool calls successfully
+        if (message.tool_calls && message.tool_calls.length > 0) {
+          for (const tc of message.tool_calls) {
+            if (tc.type === "function") {
+              let parsedArgs = {};
+              try {
+                parsedArgs = typeof tc.function.arguments === "string"
+                  ? JSON.parse(tc.function.arguments)
+                  : tc.function.arguments;
+              } catch (e) {
+                parsedArgs = tc.function.arguments;
+              }
+              const fc = {
+                name: tc.function.name,
+                args: parsedArgs,
+                id: tc.id
+              };
+              functionCalls.push(fc);
+              parts.push({ functionCall: fc });
+            }
+          }
+        } else {
+          parts.push({ text });
+        }
+
+        if (functionCalls.length === 0) {
+          throwIfEmptyModelResponse(text, `Cohere provider ${provider.name}`);
+        }
+
+        const elapsedSeconds = getElapsedSeconds(startTime);
+        const formattedText = sanitizeModelCommentText(text, elapsedSeconds);
+        const contextParts = parts.map(part => (
+          part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
+        ));
+        const textWithHeader = `*Used ${provider.name}*\n\n${formattedText}`;
+
+        return {
+          functionCalls,
+          candidates: [
+            {
+              content: {
+                role: "model",
+                parts: contextParts
+              },
+              finishReason: choice.finish_reason === "stop" ? "STOP" : (choice.finish_reason === "tool_calls" ? "STOP" : choice.finish_reason)
+            }
+          ],
+          text: textWithHeader
+        };
       }
+
 
       if (provider.type === "openrouter") {
         const messages = convertContentsToMessages(contents);

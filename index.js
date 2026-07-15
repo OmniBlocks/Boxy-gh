@@ -4,6 +4,7 @@ import fs from "fs/promises";
 import { loadNotebook, loadTodoList, loadReviews, loadStickyNotes, REVERT_FILE } from "./fs.js";
 import {ai, callAIWithFallback } from "./ai.js";
 import { executeTool, boxyWebhookTools, boxyBackgroundTools } from "./tools.js";
+import { createBoxyContainer, destroyBoxyContainer } from "./container.js";
 import { triggerCodeReview, handleWorkflowCompleted, handleReviewCommentReply } from './review.js';
 const workflowEvents = new EventEmitter();
 
@@ -558,11 +559,41 @@ export default (app) => {
     return;
   });
 
+  async function preparePrContainer(context) {
+    try {
+      const pr = context.payload.pull_request;
+      if (!pr) return;
+      const repoCloneUrl = context.payload.repository?.clone_url;
+      if (!repoCloneUrl) return;
+      const key = `pr-${pr.number}`;
+      const result = await createBoxyContainer(key, repoCloneUrl, pr.head.ref);
+      app.log.info(`Boxy container ready for ${key}: ${result.containerName} reused=${result.reused}`);
+    } catch (error) {
+      app.log.error(`Failed to prepare Boxy container for PR #${context.payload.pull_request?.number}: ${error.message}`);
+    }
+  }
+
+  async function cleanupPrContainer(context) {
+    try {
+      const pr = context.payload.pull_request;
+      if (!pr) return;
+      const key = `pr-${pr.number}`;
+      const destroyed = await destroyBoxyContainer(key);
+      app.log.info(`Boxy container cleanup for ${key}: destroyed=${destroyed}`);
+    } catch (error) {
+      app.log.error(`Failed to clean up Boxy container for PR #${context.payload.pull_request?.number}: ${error.message}`);
+    }
+  }
+
   app.on(["pull_request.opened", "pull_request.synchronize", "pull_request.reopened"], async (context) => {
-   
+    await preparePrContainer(context);
     triggerCodeReview(context, app);
   });
-  
+
+  app.on("pull_request.closed", async (context) => {
+    await cleanupPrContainer(context);
+  });
+
   app.on("push", async (context) => {
      // has to be on repo called "Boxy-gh" not the monorepo cuz the is difeernte
     if (context.payload.repository.name !== "Boxy-gh") {
