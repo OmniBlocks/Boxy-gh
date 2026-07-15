@@ -75,7 +75,7 @@ describe("My Probot app", () => {
       .get("/repos/hiimbex/testing-things/discussions/1/comments")
       .query({ per_page: "600" })
       .reply(200, [])
-      .post("/repos/hiimbex/testing-things/discussions/1/comments", (body) => {
+      .post("/repos/hiimbex/testing-things/discussions/comments/101/replies", (body) => {
         assert.ok(body.body.includes("@OmniBlocks/boxy") || body.body.length > 0);
         return true;
       })

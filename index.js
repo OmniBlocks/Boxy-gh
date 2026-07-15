@@ -245,10 +245,10 @@ async function boxyCommentorIssue(context, app) {
   if (cleanedComment === mentionHandle) {
     const repo = context.repo();
     if (isDiscussion) {
-      return await context.octokit.rest.discussions.createComment({
+      return await context.octokit.rest.discussions.createReply({
         owner: repo.owner,
         repo: repo.repo,
-        discussion_number: context.payload.discussion.number,
+        discussion_comment_id: context.payload.comment.id,
         body: "Yeah?"
       });
     }
@@ -418,10 +418,10 @@ async function boxyCommentorIssue(context, app) {
 
       const repo = context.repo();
       if (context.name === "discussion_comment") {
-        return await context.octokit.rest.discussions.createComment({
+        return await context.octokit.rest.discussions.createReply({
           owner: repo.owner,
           repo: repo.repo,
-          discussion_number: context.payload.discussion.number,
+          discussion_comment_id: context.payload.comment.id,
           body: response.text
         });
       }
