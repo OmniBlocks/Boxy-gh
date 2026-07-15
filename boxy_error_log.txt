@@ -1,0 +1,78 @@
+
+
+2026-07-15T17:09:42.949Z - something is LITERALLY LITERALLY broke: HttpError: Not Found - https://docs.github.com/rest
+    at fetchWrapper (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/node_modules/.pnpm/@octokit+request@10.0.11/node_modules/@octokit/request/dist-bundle/index.js:124:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async sendRequestWithRetries (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/node_modules/.pnpm/@octokit+auth-app@8.2.0/node_modules/@octokit/auth-app/dist-node/index.js:415:12)
+    at async Job.doExecute (C:\Users\voidc\Downloads\omniblocks\boxy\boxy\node_modules\.pnpm\bottleneck@2.19.5\node_modules\bottleneck\light.js:405:18)
+
+
+2026-07-15T17:13:37.898Z - something is LITERALLY LITERALLY broke: GraphqlResponseError: Request failed due to following response errors:
+ - Field 'addDiscussionCommentReply' doesn't exist on type 'Mutation'
+ - Variable $discussionCommentId is declared by AddDiscussionCommentReply but not used
+ - Variable $body is declared by AddDiscussionCommentReply but not used
+    at file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/node_modules/.pnpm/@octokit+graphql@9.0.3/node_modules/@octokit/graphql/dist-bundle/index.js:89:13
+    at async replyToDiscussionComment (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:87:12)
+    at async createCommentForContext (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:143:12)
+    at async boxyCommentorIssue (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:522:20)
+ other error logs: {error1: GraphqlResponseError: Request failed due to following response errors:
+ - Field 'addDiscussionCommentReply' doesn't exist on type 'Mutation'
+ - Variable $discussionCommentId is declared by AddDiscussionCommentReply but not used
+ - Variable $body is declared by AddDiscussionCommentReply but not used
+    at file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/node_modules/.pnpm/@octokit+graphql@9.0.3/node_modules/@octokit/graphql/dist-bundle/index.js:89:13
+    at async replyToDiscussionComment (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:87:12)
+    at async boxyCommentorIssue (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:491:16), error2: GraphqlResponseError: Request failed due to following response errors:
+ - Field 'addDiscussionCommentReply' doesn't exist on type 'Mutation'
+ - Variable $discussionCommentId is declared by AddDiscussionCommentReply but not used
+ - Variable $body is declared by AddDiscussionCommentReply but not used
+    at file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/node_modules/.pnpm/@octokit+graphql@9.0.3/node_modules/@octokit/graphql/dist-bundle/index.js:89:13
+    at async replyToDiscussionComment (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:87:12)
+    at async createCommentForContext (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:143:12)
+    at async boxyCommentorIssue (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:505:14), error3: GraphqlResponseError: Request failed due to following response errors:
+ - Field 'addDiscussionCommentReply' doesn't exist on type 'Mutation'
+ - Variable $discussionCommentId is declared by AddDiscussionCommentReply but not used
+ - Variable $body is declared by AddDiscussionCommentReply but not used
+    at file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/node_modules/.pnpm/@octokit+graphql@9.0.3/node_modules/@octokit/graphql/dist-bundle/index.js:89:13
+    at async replyToDiscussionComment (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:87:12)
+    at async createCommentForContext (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:143:12)
+    at async boxyCommentorIssue (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:509:16), error4: GraphqlResponseError: Request failed due to following response errors:
+ - Field 'addDiscussionCommentReply' doesn't exist on type 'Mutation'
+ - Variable $discussionCommentId is declared by AddDiscussionCommentReply but not used
+ - Variable $body is declared by AddDiscussionCommentReply but not used
+    at file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/node_modules/.pnpm/@octokit+graphql@9.0.3/node_modules/@octokit/graphql/dist-bundle/index.js:89:13
+    at async replyToDiscussionComment (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:87:12)
+    at async createCommentForContext (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:143:12)
+    at async boxyCommentorIssue (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:516:18)
+
+}
+
+2026-07-15T17:30:01.523Z - something is LITERALLY LITERALLY broke: GraphqlResponseError: Request failed due to following response errors:
+ - Parent comment is already in a thread, cannot reply to it
+    at file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/node_modules/.pnpm/@octokit+graphql@9.0.3/node_modules/@octokit/graphql/dist-bundle/index.js:89:13
+    at async replyToDiscussionComment (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:95:12)
+    at async createCommentForContext (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:151:12)
+    at async boxyCommentorIssue (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:533:20)
+ other error logs: {error1: GraphqlResponseError: Request failed due to following response errors:
+ - Parent comment is already in a thread, cannot reply to it
+    at file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/node_modules/.pnpm/@octokit+graphql@9.0.3/node_modules/@octokit/graphql/dist-bundle/index.js:89:13
+    at async replyToDiscussionComment (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:95:12)
+    at async boxyCommentorIssue (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:501:16), error2: GraphqlResponseError: Request failed due to following response errors:
+ - Parent comment is already in a thread, cannot reply to it
+    at file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/node_modules/.pnpm/@octokit+graphql@9.0.3/node_modules/@octokit/graphql/dist-bundle/index.js:89:13
+    at runNextTicks (node:internal/process/task_queues:65:5)
+    at process.processTimers (node:internal/timers:538:9)
+    at async replyToDiscussionComment (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:95:12)
+    at async createCommentForContext (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:151:12)
+    at async boxyCommentorIssue (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:516:14), error3: GraphqlResponseError: Request failed due to following response errors:
+ - Parent comment is already in a thread, cannot reply to it
+    at file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/node_modules/.pnpm/@octokit+graphql@9.0.3/node_modules/@octokit/graphql/dist-bundle/index.js:89:13
+    at async replyToDiscussionComment (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:95:12)
+    at async createCommentForContext (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:151:12)
+    at async boxyCommentorIssue (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:520:16), error4: GraphqlResponseError: Request failed due to following response errors:
+ - Parent comment is already in a thread, cannot reply to it
+    at file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/node_modules/.pnpm/@octokit+graphql@9.0.3/node_modules/@octokit/graphql/dist-bundle/index.js:89:13
+    at async replyToDiscussionComment (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:95:12)
+    at async createCommentForContext (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:151:12)
+    at async boxyCommentorIssue (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:527:18)
+
+}
