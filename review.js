@@ -1,7 +1,7 @@
 import AdmZip from 'adm-zip';
-import { callAIWithFallback } from './ai';
-import { loadReviews, saveReviews, loadNotebook, loadTodoList, loadStickyNotes } from './fs';
-import { boxyReviewTools, executeTool, boxyWebhookTools } from './tools';
+import { callAIWithFallback } from './ai.js';
+import { loadReviews, saveReviews, loadNotebook, loadTodoList, loadStickyNotes } from './fs.js';
+import { boxyReviewTools, executeTool, boxyWebhookTools } from './tools.js';
 
 export async function triggerCodeReview(context, app) {
   const pr = context.payload.pull_request;
