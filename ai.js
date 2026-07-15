@@ -93,7 +93,7 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
     { name: "openrouter-qwen-coder", type: "openrouter", model: "qwen/qwen3-coder:free" },
     { name: "openrouter-gemma-4-31b-a4b-it", type: "openrouter", model: "google/gemma-4-31b-it:free" },
     { name: "pollinations-qwen-coder", type: "pollinations", model: "qwen-coder" },
-    //{ name: "cerebras-gemma-4-31b", type: "cerebras", model: "gemma-4-31b" },
+    { name: "cerebras-gemma-4-31b", type: "cerebras", model: "gemma-4-31b" },
   ];
 
   let lastError = null;
@@ -436,6 +436,7 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
+        const textWithHeader = `*Used ${provider.name}*\n\n${formattedText}`;
 
         return {
           functionCalls,
@@ -448,7 +449,7 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
               finishReason: choice.finish_reason === "stop" ? "STOP" : (choice.finish_reason === "tool_calls" ? "STOP" : choice.finish_reason)
             }
           ],
-          text: formattedText
+          text: textWithHeader
         };
       }
     } catch (err) {
