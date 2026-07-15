@@ -742,6 +742,8 @@ async function executeTool(call, context, app) {
       }
       
       toolResult = { status: "review_completed" };
+    } else {
+      toolResult = { error: "Tool does not exist" };
     }
   } catch (err) {
     if (app) app.log.warn(`Tool ${call.name} failed: ${err.message}`);
@@ -759,9 +761,9 @@ async function triggerCodeReview(context, app) {
     owner: context.repo().owner, repo: context.repo().repo, issue_number: pr.number, per_page: 500
   });
 
-  let boxyComment = comments.find(c => c.user.login === "boxycpu[bot]" && c.body.includes("# Code Review"));
+  let boxyComment = comments.find(c => c.user.login === "boxycpu[bot]" && c.body.includes("<!-- BOXY REVIEW COMMENT -->"));
 
-  const commentBody = `# Code Review Started!\nHi, @${author}! I'll get started on reviewing this PR.  Once finished, I'll update this comment with a full summary and post inline comments!`;
+  const commentBody = `# Code Review Started!\nHi, @${author}! I'll get started on reviewing this PR.  Once finished, I'll update this comment with a full summary and post inline comments!<!-- BOXY REVIEW COMMENT -->`;
 
   let commentId;
   if (boxyComment) { 
