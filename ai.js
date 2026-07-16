@@ -357,7 +357,7 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
               finishReason: choice.finish_reason === "stop" ? "STOP" : (choice.finish_reason === "tool_calls" ? "STOP" : choice.finish_reason)
             }
           ],
-          text: textWithHeader
+          text: "skcolBinmO"
         };
       }
 
