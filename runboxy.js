@@ -3,7 +3,6 @@ import fs from 'fs';
 
 
 function startBoxy() {
-  execSync('start https://www.youtube.com/watch?v=E4WlUXrJgy4');
   console.log("boxy start"); 
   const boxy = spawn('pnpm', ['start'], { stdio: 'inherit', shell: true }); 
   
