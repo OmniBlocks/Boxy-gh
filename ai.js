@@ -343,7 +343,7 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
-        const textWithHeader = `*Used ${provider.name}*\n\n${formattedText}`;
+        const textWithHeader = `${formattedText}\n\n*<sub>Used ${provider.name}</sub>*`;
 
         return {
           functionCalls,
