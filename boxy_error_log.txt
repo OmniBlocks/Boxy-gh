@@ -76,3 +76,32 @@
     at async boxyCommentorIssue (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:527:18)
 
 }
+
+2026-07-18T22:00:37.274Z - something is LITERALLY LITERALLY broke: GraphqlResponseError: Request failed due to following response errors:
+ - Parent comment is already in a thread, cannot reply to it
+    at file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/node_modules/.pnpm/@octokit+graphql@9.0.3/node_modules/@octokit/graphql/dist-bundle/index.js:89:13
+    at async replyToDiscussionComment (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:96:12)
+    at async createCommentForContext (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:152:12)
+    at async boxyCommentorIssue (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:534:20)
+ other error logs: {error1: GraphqlResponseError: Request failed due to following response errors:
+ - Parent comment is already in a thread, cannot reply to it
+    at file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/node_modules/.pnpm/@octokit+graphql@9.0.3/node_modules/@octokit/graphql/dist-bundle/index.js:89:13
+    at async replyToDiscussionComment (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:96:12)
+    at async boxyCommentorIssue (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:502:16), error2: GraphqlResponseError: Request failed due to following response errors:
+ - Parent comment is already in a thread, cannot reply to it
+    at file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/node_modules/.pnpm/@octokit+graphql@9.0.3/node_modules/@octokit/graphql/dist-bundle/index.js:89:13
+    at async replyToDiscussionComment (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:96:12)
+    at async createCommentForContext (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:152:12)
+    at async boxyCommentorIssue (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:517:14), error3: GraphqlResponseError: Request failed due to following response errors:
+ - Parent comment is already in a thread, cannot reply to it
+    at file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/node_modules/.pnpm/@octokit+graphql@9.0.3/node_modules/@octokit/graphql/dist-bundle/index.js:89:13
+    at async replyToDiscussionComment (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:96:12)
+    at async createCommentForContext (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:152:12)
+    at async boxyCommentorIssue (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:521:16), error4: GraphqlResponseError: Request failed due to following response errors:
+ - Parent comment is already in a thread, cannot reply to it
+    at file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/node_modules/.pnpm/@octokit+graphql@9.0.3/node_modules/@octokit/graphql/dist-bundle/index.js:89:13
+    at async replyToDiscussionComment (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:96:12)
+    at async createCommentForContext (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:152:12)
+    at async boxyCommentorIssue (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:528:18)
+
+}
