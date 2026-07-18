@@ -1,12 +1,15 @@
 import Cerebras from "@cerebras/cerebras_cloud_sdk";
 import { GoogleGenAI } from "@google/genai";
 import { OpenRouter } from "@openrouter/sdk";
+import Groq from "groq-sdk"; 
 import { convertContentsToMessages } from './review.js';
 
 export const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 export const aiBackup = new GoogleGenAI({ apiKey: process.env.GEMINI_BACKUP_KEY });
 export const aiCerebras = new Cerebras({ apiKey: process.env.CEREBRAS_API_KEY });
 export const aiBackupBackup = new OpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
+export const aiGroq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
 export function throwIfEmptyModelResponse(text, providerName) {
   if (!text || !text.trim()) {
     throw new Error(`${providerName} returned an empty response`);
@@ -99,6 +102,8 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
     { name: "pollinations-kimi-2.5", type: "pollinations", model: "sharktide/inferenceport-ai-kimi-k2.5" },
     { name: "pollinations-step-flash-3.5", type: "pollinations", model: "Spit-fires/step-3.5-flash-free" },
     { name: "command-a-plus-05-2026", type: "cohere", model: "command-a-plus-05-2026", useBackup: false },
+    { name: "groq-llama-3.3-70b-versatile", type: "groq", model: "llama-3.3-70b-versatile", useBackup: false },
+    { name: "groq-llama-3.1-8b-instant", type: "groq", model: "llama-3.1-8b-instant", useBackup: false },
     { name: "openrouter-nemotron-3-super", type: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
     { name: "openrouter-qwen-coder", type: "openrouter", model: "qwen/qwen3-coder:free" },
     { name: "openrouter-gemma-4-31b-a4b-it", type: "openrouter", model: "google/gemma-4-31b-it:free" },
@@ -248,6 +253,109 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
           text: formattedText
         };
       } 
+      if (provider.type === "groq") {
+        if (!process.env.GROQ_API_KEY) {
+          continue;
+        }
+
+        const messages = convertContentsToMessages(contents);
+
+        let toolsParam = undefined;
+        let toolChoiceParam = undefined;
+
+        if (tools && tools.length > 0) {
+          toolsParam = tools.map(t => {
+            const props = {};
+            for (const [k, v] of Object.entries(t.parameters?.properties || {})) {
+              props[k] = { ...v };
+              if (typeof props[k].type === 'string') {
+                props[k].type = props[k].type.toLowerCase();
+              }
+              if (props[k].items && typeof props[k].items.type === 'string') {
+                props[k].items = { ...props[k].items, type: props[k].items.type.toLowerCase() };
+              }
+            }
+            return {
+              type: "function",
+              function: {
+                name: t.name,
+                description: t.description || "",
+                parameters: {
+                  type: "object",
+                  properties: props,
+                  required: t.parameters?.required || []
+                }
+              }
+            };
+          });
+          toolChoiceParam = "auto";
+        }
+
+        const response = await aiGroq.chat.completions.create({
+          model: provider.model,
+          messages: messages,
+          ...(toolsParam && { tools: toolsParam, tool_choice: toolChoiceParam })
+        });
+
+        const choice = response.choices?.[0];
+        const message = choice?.message;
+
+        if (!message) {
+          throw new Error("Empty choice content received from Groq");
+        }
+
+        const text = message.content || "";
+        const functionCalls = [];
+        const parts = [];
+
+        if (message.tool_calls && message.tool_calls.length > 0) {
+          for (const tc of message.tool_calls) {
+            if (tc.type === "function") {
+              let parsedArgs = {};
+              try {
+                parsedArgs = typeof tc.function.arguments === "string"
+                  ? JSON.parse(tc.function.arguments)
+                  : tc.function.arguments;
+              } catch (e) {
+                parsedArgs = tc.function.arguments;
+              }
+              const fc = {
+                name: tc.function.name,
+                args: parsedArgs,
+                id: tc.id
+              };
+              functionCalls.push(fc);
+              parts.push({ functionCall: fc });
+            }
+          }
+        } else {
+          parts.push({ text });
+        }
+
+        if (functionCalls.length === 0) {
+          throwIfEmptyModelResponse(text, `Groq provider ${provider.name}`);
+        }
+
+        const elapsedSeconds = getElapsedSeconds(startTime);
+        const formattedText = sanitizeModelCommentText(text, elapsedSeconds);
+        const contextParts = parts.map(part => (
+          part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
+        ));
+
+        return {
+          functionCalls,
+          candidates: [
+            {
+              content: {
+                role: "model",
+                parts: contextParts
+              },
+              finishReason: choice.finish_reason === "stop" ? "STOP" : (choice.finish_reason === "tool_calls" ? "STOP" : choice.finish_reason)
+            }
+          ],
+          text: formattedText
+        };
+      }
 
       if (provider.type === "cohere") {
         if (!process.env.COHERE_API_KEY) {
