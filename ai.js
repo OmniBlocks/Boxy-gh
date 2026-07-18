@@ -91,10 +91,10 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
     { name: "gemma-4-26b-a4b-it-backup", type: "google", model: "gemma-4-26b-a4b-it", useBackup: true },
     { name: "gemma-4-31b-it-backup", type: "google", model: "gemma-4-31b-it", useBackup: true },
     { name: "pollinations-ultra-fast-gemma", type: "pollinations", model: "tomdacatto/gemma-4-31b-fast" },
-    { name: "pollinations-step-flash-3.5", type: "pollinations", model: "Spit-fires/step-3.5-flash-free" },
     { name: "pollinations-gemma-4-31b-it", type: "pollinations", model: "Bakhshi7889/gemma-4-31b-it" },
     { name: "pollinations-glm-5.2-cheap", type: "pollinations", model: "solarnode-developement/glm-5.2-cheap" },
-    { name: "pollinations-kimi-k2.7-code", type: "pollinations", model: "sharktide/inferenceport-ai-kimi-k2.7-code" },
+    { name: "pollinations-kimi-k2.7-code", type: "pollinations", model: "sharktide/inferenceport-ai-kimi-k2.7-code" },    
+    { name: "pollinations-step-flash-3.5", type: "pollinations", model: "Spit-fires/step-3.5-flash-free" },
     { name: "command-a-plus-05-2026", type: "cohere", model: "command-a-plus-05-2026", useBackup: false },
     { name: "openrouter-nemotron-3-super", type: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
     { name: "openrouter-qwen-coder", type: "openrouter", model: "qwen/qwen3-coder:free" },
@@ -565,7 +565,7 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
-        const textWithHeader = `*Used ${provider.name}*\n\n${formattedText}`;
+        const textWithHeader = `${formattedText}\n\n*<sub>Used ${provider.name}</sub>*`;
 
         return {
           functionCalls,
