@@ -474,7 +474,7 @@ async function boxyCommentorIssue(context, app) {
         if (loopCount >= 9) {
           conversationTurns.push({
             role: "user",
-            parts: [{ text: "(system) You have made over 9 tool calls in a row. You only have 10 before you hit the limit! " }]
+            parts: [{ text: "(system) You have made over 9 tool calls in a row. You only have 1 left before you hit the limit! " }]
           });
         }
  
