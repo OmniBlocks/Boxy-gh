@@ -1,7 +1,6 @@
 import { Type } from "@google/genai";
 import { labelIssue, issueCloseOrOpen } from "./index.js";
 import { loadNotebook, saveMemoryToFile, saveStickyNoteToFile, createTodoListItem, loadTodoList, saveTodoList, loadReviews, saveReviews } from "./fs.js";
-import { createBoxyContainer, destroyBoxyContainer, runCommandInBoxyContainer, getBoxyContainerStatus } from "./container.js";
 
 const readMemoryDeclaration = {
   name: "read_memory",
@@ -24,6 +23,20 @@ const saveMemoryDeclaration = {
       content: { type: Type.STRING, description: "The full details to remember." },
     },
     required: ["title", "content"],
+  },
+};
+const executeCommandDeclaration = {
+  name: "execute_command",
+  description: "Execute a bash shell command in your computer.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      command: { 
+        type: Type.STRING, 
+        description: "The full bash command string to execute (e.g. 'ls -la', 'npm test', 'cat file.txt | grep foo')." 
+      }
+    },
+    required: ["command"],
   },
 };
 const saveStickyNoteDeclaration = {
@@ -50,54 +63,7 @@ const saveTodoListItemDeclaration = {
     required: ["title", "description"],
   },
 };
-const createContainerDeclaration = {
-  name: "create_container",
-  description: "Create or initialize a Boxy Docker container for a PR or todo, clone the repo into it, and install Node, Python, and OpenJDK.",
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      key: { type: Type.STRING, description: "The unique container key, e.g. pr-123 or todo-456." },
-      repo_clone_url: { type: Type.STRING, description: "The repository clone URL to clone into the container." },
-      branch: { type: Type.STRING, description: "Optional branch or ref to checkout." },
-      type: { type: Type.STRING, enum: ["pr", "todo"], description: "The kind of container being created." }
-    },
-    required: ["key", "repo_clone_url", "type"],
-  },
-};
-const runCommandInContainerDeclaration = {
-  name: "run_command_in_container",
-  description: "Run a shell command inside a Boxy Docker container for a PR or todo.",
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      key: { type: Type.STRING, description: "The unique container key." },
-      command: { type: Type.STRING, description: "The shell command to execute inside the container." },
-    },
-    required: ["key", "command"],
-  },
-};
-const destroyContainerDeclaration = {
-  name: "destroy_container",
-  description: "Destroy the Boxy Docker container associated with a PR or todo.",
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      key: { type: Type.STRING, description: "The unique container key." },
-    },
-    required: ["key"],
-  },
-};
-const getContainerStatusDeclaration = {
-  name: "get_container_status",
-  description: "Get status information for the Boxy Docker container associated with a PR or todo.",
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      key: { type: Type.STRING, description: "The unique container key." },
-    },
-    required: ["key"],
-  },
-};
+
 const searchCodeDeclaration = {
   name: "search_code",
   description: "Search the repository for specific code, keywords, or function names. Returns a list of files that match.",
@@ -413,26 +379,7 @@ export async function executeTool(call, context, app) {
       });
       toolResult = { status: "success", message: `To-do item '${title}' added.` };
     }
-    else if (call.name === "create_container") {
-      const { key, repo_clone_url, branch, type } = call.args;
-      const result = await createBoxyContainer(key, repo_clone_url, branch || null);
-      toolResult = { status: "success", result };
-    }
-    else if (call.name === "run_command_in_container") {
-      const { key, command } = call.args;
-      const result = await runCommandInBoxyContainer(key, command);
-      toolResult = { status: "success", ...result };
-    }
-    else if (call.name === "destroy_container") {
-      const { key } = call.args;
-      const destroyed = await destroyBoxyContainer(key);
-      toolResult = { status: destroyed ? "success" : "not_found", destroyed };
-    }
-    else if (call.name === "get_container_status") {
-      const { key } = call.args;
-      const status = await getBoxyContainerStatus(key);
-      toolResult = status;
-    }
+
     else if (call.name === "complete_todo_list_item") {
       const todoList = await loadTodoList();
       if (todoList[call.args.id]) {
