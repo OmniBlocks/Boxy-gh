@@ -1,4 +1,5 @@
 import { Sandbox } from "tensorlake";
+import { loadNotebook, loadTodoList, loadReviews, loadStickyNotes, REVERT_FILE } from "./fs.js";
 let sandbox = null;
 
 async function initializeSandbox() {
