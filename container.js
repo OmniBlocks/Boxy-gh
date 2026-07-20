@@ -1,9 +1,51 @@
 import { Sandbox } from "tensorlake";
-const sandbox = await Sandbox.create({
+let sandbox = null;
+
+async function initializeSandbox() {
+  if (!sandbox) {
+    sandbox = await Sandbox.create({
   name: "boxy-computer", 
   cpus: 2.0,
   memoryMb: 2048,
 });
+  }
+}
 
-async function runCommandInBoxyContainer(command) {
+
+export async function runCommandInBoxyContainer(command) {
+  let isBusy = false;
   
+      
+      const todoList = await loadTodoList();
+      for (const [id, item] of Object.entries(todoList)) {
+        if (!item.completed) {
+          isBusy = true;
+          break;
+        }
+      }
+   
+      if (!isBusy) {
+        const reviews = await loadReviews();
+        if (Object.keys(reviews).length > 0) { 
+          isBusy = true;
+        }
+      }
+  if (isBusy) {
+    initializeSandbox();
+    return {
+      stdout: "",
+      stderr: "You're using the computer to work on another task on your to-do list right now. Try again later once you're done, and try to complete what you're doing with another tool. If what you're trying to do absolutely REQUIRES using your computer, add it to your to-do list to do it later and inform the user.",
+      exitCode: 1,
+    };
+  }
+  
+  const result = await sandbox.run("/bin/sh", {
+    args: ["-c", args.command],
+  });
+
+  return {
+    stdout: result.stdout,
+    stderr: result.stderr,
+    exitCode: result.exitCode,
+  };
+}
