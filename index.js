@@ -371,10 +371,10 @@ async function boxyCommentorIssue(context, app) {
       });
 
       conversationHistory += "=== CONVERSATION LOG ===\n";
-      conversationHistory += comments.length > 100 ? "There are more than 100 comments, so some have been hidden to prevent you from exploding (If there is something from a comment you want to remember, that's what sticky notes are for.). \n----\n" : "";
+      conversationHistory += comments.length > 99 ? "There are more than 100 comments, so some have been hidden to prevent you from exploding (If there is something from a comment you want to remember, that's what sticky notes are for.). \n----\n" : "";
       
       // If there are more than 100 comments, take the first one and the last 99
-      const targetComments = comments.length > 100 
+      const targetComments = comments.length > 99 
         ? [comments[0], ...comments.slice(-99)] 
         : comments;
 
