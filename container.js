@@ -5,14 +5,20 @@ let sandbox = null;
 
 async function initializeSandbox() {
   if (!sandbox) {
+    try {
     sandbox = await Sandbox.create({
   name: "boxy-computer", 
   cpus: 1.0,
   memoryMb: 1024,
-});
+}); 
   }
+  catch (error) {
+    sandbox = await Sandbox.get("boxy-computer", {
+          apiKey: process.env.TENSORLAKE_API_KEY,
+        });
 }
-
+}
+}
 
 export async function runCommandInBoxyContainer(command) {
   let isBusy = false;
