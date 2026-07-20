@@ -458,8 +458,13 @@ export async function executeTool(call, context, app) {
     }
     else if (call.name === "execute_command") {
       // pass whether it's a webhook triggered by issues comment added, issue opened, or code review comment
+      let BoxyWebhook = false;
+      try {
       let action = `${context.name}.${context.payload.action}`;
-      let isBoxyWebhook = action.startsWith("issues.") || action.startsWith("pull_request.") || action.startsWith("issue_comment.");
+       isBoxyWebhook = action.startsWith("issues.") || action.startsWith("pull_request.") || action.startsWith("issue_comment.");
+      } catch (error) {
+      app.log.info("hurray");
+      }
       toolResult = await runCommandInBoxyContainer(call.args.command, isBoxyWebhook);
     }
   
