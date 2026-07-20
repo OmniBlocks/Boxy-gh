@@ -23,7 +23,7 @@ export async function runCommandInBoxyContainer(command, isBoxyWebhook = false) 
     }
   }
   
-  if (isBusy) {
+  if (isBusy && isBoxyWebhook) {
     return {
       stdout: "",
       stderr: "You're using the computer to work on another task on your to-do list right now. Try again later once you're done...",
