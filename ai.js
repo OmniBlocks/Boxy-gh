@@ -109,7 +109,9 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
     { name: "openrouter-gemma-4-31b-a4b-it", type: "openrouter", model: "google/gemma-4-31b-it:free" },
     { name: "pollinations-gemma-slightly-more-expensive", type: "pollinations", model: "MarcosFRG/gemma-4-31b" },
     { name: "cerebras-gemma-4-31b", type: "cerebras", model: "gemma-4-31b" },
-    { name: "pollinations-kimi-k3", type: "pollinations", model: "vendouple/kimi-k3" }
+    { name: "pollinations-kimi-k3", type: "pollinations", model: "vendouple/kimi-k3" },
+    { name: "hyperbolic-llama-3.3-70b", type: "hyperbolic", model: "meta-llama/Llama-3.3-70B-Instruct" },
+    { name: "siliconflow-qwen-2.5-72b", type: "siliconflow", model: "Qwen/Qwen2.5-72B-Instruct" }
   ];
 
   let lastError = null;
@@ -581,6 +583,236 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
         };
       }
 
+      if (provider.type === "hyperbolic") {
+        if (!process.env.HYPERBOLIC_API_KEY) {
+          continue;
+        }
+
+        const messages = convertContentsToMessages(contents);
+        const body = {
+          model: provider.model,
+          messages: messages
+        };
+
+        if (tools && tools.length > 0) {
+          body.tools = tools.map(t => {
+            const props = {};
+            for (const [k, v] of Object.entries(t.parameters?.properties || {})) {
+              props[k] = { ...v };
+              if (typeof props[k].type === 'string') {
+                props[k].type = props[k].type.toLowerCase();
+              }
+              if (props[k].items && typeof props[k].items.type === 'string') {
+                props[k].items = { ...props[k].items, type: props[k].items.type.toLowerCase() };
+              }
+            }
+            return {
+              type: "function",
+              function: {
+                name: t.name,
+                description: t.description || "",
+                parameters: {
+                  type: "object",
+                  properties: props,
+                  required: t.parameters?.required || []
+                }
+              }
+            };
+          });
+          body.tool_choice = "auto";
+        }
+
+        const headers = {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.HYPERBOLIC_API_KEY}`
+        };
+
+        const res = await fetch("https://api.hyperbolic.xyz/v1/chat/completions", {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body)
+        });
+
+        if (!res.ok) {
+          throw new Error(`Hyperbolic Status ${res.status}: ${await res.text()}`);
+        }
+
+        const data = await res.json();
+        const choice = data.choices?.[0];
+        const message = choice?.message;
+
+        if (!message) {
+          throw new Error("Empty choice content received from Hyperbolic");
+        }
+
+        const text = message.content || "";
+        const functionCalls = [];
+        const parts = [];
+
+        if (message.tool_calls && message.tool_calls.length > 0) {
+          for (const tc of message.tool_calls) {
+            if (tc.type === "function") {
+              let parsedArgs = {};
+              try {
+                parsedArgs = typeof tc.function.arguments === "string"
+                  ? JSON.parse(tc.function.arguments)
+                  : tc.function.arguments;
+              } catch (e) {
+                parsedArgs = tc.function.arguments;
+              }
+              const fc = {
+                name: tc.function.name,
+                args: parsedArgs,
+                id: tc.id
+              };
+              functionCalls.push(fc);
+              parts.push({ functionCall: fc });
+            }
+          }
+        } else {
+          parts.push({ text });
+        }
+
+        if (functionCalls.length === 0) {
+          throwIfEmptyModelResponse(text, `Hyperbolic provider ${provider.name}`);
+        }
+
+        const elapsedSeconds = getElapsedSeconds(startTime);
+        const formattedText = sanitizeModelCommentText(text, elapsedSeconds);
+        const contextParts = parts.map(part => (
+          part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
+        ));
+
+        return {
+          functionCalls,
+          candidates: [
+            {
+              content: {
+                role: "model",
+                parts: contextParts
+              },
+              finishReason: choice.finish_reason === "stop" ? "STOP" : (choice.finish_reason === "tool_calls" ? "STOP" : choice.finish_reason)
+            }
+          ],
+          text: formattedText
+        };
+      }
+
+      if (provider.type === "siliconflow") {
+        if (!process.env.SILICONFLOW_API_KEY) {
+          continue;
+        }
+
+        const messages = convertContentsToMessages(contents);
+        const body = {
+          model: provider.model,
+          messages: messages
+        };
+
+        if (tools && tools.length > 0) {
+          body.tools = tools.map(t => {
+            const props = {};
+            for (const [k, v] of Object.entries(t.parameters?.properties || {})) {
+              props[k] = { ...v };
+              if (typeof props[k].type === 'string') {
+                props[k].type = props[k].type.toLowerCase();
+              }
+              if (props[k].items && typeof props[k].items.type === 'string') {
+                props[k].items = { ...props[k].items, type: props[k].items.type.toLowerCase() };
+              }
+            }
+            return {
+              type: "function",
+              function: {
+                name: t.name,
+                description: t.description || "",
+                parameters: {
+                  type: "object",
+                  properties: props,
+                  required: t.parameters?.required || []
+                }
+              }
+            };
+          });
+          body.tool_choice = "auto";
+        }
+
+        const headers = {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.SILICONFLOW_API_KEY}`
+        };
+
+        const res = await fetch("https://api.siliconflow.cn/v1/chat/completions", {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body)
+        });
+
+        if (!res.ok) {
+          throw new Error(`SiliconFlow Status ${res.status}: ${await res.text()}`);
+        }
+
+        const data = await res.json();
+        const choice = data.choices?.[0];
+        const message = choice?.message;
+
+        if (!message) {
+          throw new Error("Empty choice content received from SiliconFlow");
+        }
+
+        const text = message.content || "";
+        const functionCalls = [];
+        const parts = [];
+
+        if (message.tool_calls && message.tool_calls.length > 0) {
+          for (const tc of message.tool_calls) {
+            if (tc.type === "function") {
+              let parsedArgs = {};
+              try {
+                parsedArgs = typeof tc.function.arguments === "string"
+                  ? JSON.parse(tc.function.arguments)
+                  : tc.function.arguments;
+              } catch (e) {
+                parsedArgs = tc.function.arguments;
+              }
+              const fc = {
+                name: tc.function.name,
+                args: parsedArgs,
+                id: tc.id
+              };
+              functionCalls.push(fc);
+              parts.push({ functionCall: fc });
+            }
+          }
+        } else {
+          parts.push({ text });
+        }
+
+        if (functionCalls.length === 0) {
+          throwIfEmptyModelResponse(text, `SiliconFlow provider ${provider.name}`);
+        }
+
+        const elapsedSeconds = getElapsedSeconds(startTime);
+        const formattedText = sanitizeModelCommentText(text, elapsedSeconds);
+        const contextParts = parts.map(part => (
+          part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
+        ));
+
+        return {
+          functionCalls,
+          candidates: [
+            {
+              content: {
+                role: "model",
+                parts: contextParts
+              },
+              finishReason: choice.finish_reason === "stop" ? "STOP" : (choice.finish_reason === "tool_calls" ? "STOP" : choice.finish_reason)
+            }
+          ],
+          text: formattedText
+        };
+      }
+
       if (provider.type === "pollinations") {
         const messages = convertContentsToMessages(contents);
         const body = {
@@ -710,4 +942,3 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
 export function getElapsedSeconds(startTime) {
   return ((Date.now() - startTime) / 1000).toFixed(1);
 }
-
