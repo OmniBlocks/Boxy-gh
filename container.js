@@ -4,7 +4,7 @@ import { loadTodoList, loadReviews } from "./fs.js";
 
 const execAsync = promisify(exec);
 
-export async function runCommandInBoxyContainer(command) {
+export async function runCommandInBoxyContainer(command, isBoxyWebhook = false) {
   let isBusy = false;
   
   
@@ -40,7 +40,7 @@ export async function runCommandInBoxyContainer(command) {
   const dockerCmd = `docker run --rm --memory="256m" -v /home/gato/boxy-workspace:/workspace -w /workspace node:20-alpine /bin/sh -c "${safeCommand}"`;
 
   try {
-    const { stdout, stderr } = await execAsync(dockerCmd, { timeout: 60000 });
+    const { stdout, stderr } = await execAsync(dockerCmd, { timeout: 120000 });
     return { stdout, stderr, exitCode: 0 };
   } catch (error) {
     return {
