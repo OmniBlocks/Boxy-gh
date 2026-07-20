@@ -1,12 +1,13 @@
 import { Sandbox } from "tensorlake";
 import { loadNotebook, loadTodoList, loadReviews, loadStickyNotes, REVERT_FILE } from "./fs.js";
+
 let sandbox = null;
 
 async function initializeSandbox() {
   if (!sandbox) {
     sandbox = await Sandbox.create({
   name: "boxy-computer", 
-  cpus: 2.0,
+  cpus: 1.0,
   memoryMb: 2048,
 });
   }
