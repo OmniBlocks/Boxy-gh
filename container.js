@@ -33,16 +33,16 @@ export async function runCommandInBoxyContainer(command) {
         }
       }
   if (isBusy) {
-    initializeSandbox();
+   
     return {
       stdout: "",
       stderr: "You're using the computer to work on another task on your to-do list right now. Try again later once you're done, and try to complete what you're doing with another tool. If what you're trying to do absolutely REQUIRES using your computer, add it to your to-do list to do it later and inform the user.",
       exitCode: 1,
     };
   }
-  
+  await initializeSandbox();
   const result = await sandbox.run("/bin/sh", {
-    args: ["-c", args.command],
+    args: ["-c", command],
   });
 
   return {
