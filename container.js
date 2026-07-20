@@ -13,7 +13,8 @@ async function initializeSandbox() {
 }); 
   }
   catch (error) {
-    sandbox = await Sandbox.get("boxy-computer", {
+    sandbox = await Sandbox.create("boxy-computer", {
+      name: "boxy-computer",
           apiKey: process.env.TENSORLAKE_API_KEY,
         });
 }
