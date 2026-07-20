@@ -1,6 +1,7 @@
 import { Type } from "@google/genai";
 import { labelIssue, issueCloseOrOpen } from "./index.js";
 import { loadNotebook, saveMemoryToFile, saveStickyNoteToFile, createTodoListItem, loadTodoList, saveTodoList, loadReviews, saveReviews } from "./fs.js";
+import { runCommandInBoxyContainer } from "./container.js";
 
 const readMemoryDeclaration = {
   name: "read_memory",
@@ -233,7 +234,8 @@ export const boxyReviewTools = [
   getPrDiffDeclaration,
   updatePrSummaryDeclaration,
   createInlineCommentDeclaration,
-  finishPrReviewDeclaration
+  finishPrReviewDeclaration,
+  executeCommandDeclaration
 ];
 export const boxyWebhookTools = [
   readMemoryDeclaration,
@@ -245,7 +247,8 @@ export const boxyWebhookTools = [
   closeOrOpenIssueDeclaration,
   labelIssueDeclaration,
   saveTodoListItemDeclaration,
-  reactCommentDeclaration
+  reactCommentDeclaration,
+  executeCommandDeclaration
 ];
 export const boxyBackgroundTools = [
   readMemoryDeclaration,
@@ -258,7 +261,8 @@ export const boxyBackgroundTools = [
   labelIssueDeclaration,
   saveTodoListItemDeclaration,
   completeTodoListItemDeclaration,
-  createCommentDeclaration
+  createCommentDeclaration,
+  executeCommandDeclaration
 ];
 export async function executeTool(call, context, app) {
   let toolResult = {};
@@ -402,7 +406,6 @@ export async function executeTool(call, context, app) {
       const diff = await context.octokit.rest.pulls.get({
         owner, repo, pull_number: call.args.pull_number, mediaType: { format: "diff" }
       });
-
       const lines = diff.data.split("\n");
       const formattedLines = [];
       let inHunk = false;
@@ -453,6 +456,10 @@ export async function executeTool(call, context, app) {
       }
       toolResult = { diff: formattedLines.join("\n").substring(0, 50000) };
     }
+    else if (call.name === "execute_command") {
+      toolResult = await runCommandInBoxyContainer(call.args.command);
+    }
+  
     else if (call.name === "update_pr_summary") {
       await context.octokit.rest.issues.updateComment({ owner, repo, comment_id: call.args.comment_id, body: call.args.body });
       toolResult = { status: "success" };
@@ -517,7 +524,8 @@ export async function executeTool(call, context, app) {
         message: `Successfully reacted with '${reaction}' to comment ${comment_id}.`,
         reaction_id: data.id 
       };
-    }else {
+    } 
+    else {
       toolResult = { error: "Tool does not exist" };
     }
   } catch (err) {
