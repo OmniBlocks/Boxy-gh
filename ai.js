@@ -96,7 +96,7 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
     { name: "pollinations-ultra-fast-gemma", type: "pollinations", model: "tomdacatto/gemma-4-31b-fast" },
     { name: "pollinations-agnes-1.5-flash", type: "pollinations", model: "Catniti/agnes-1.5-flash" },
     { name: "pollinations-minimax-m3-31b", type: "pollinations", model: "sharktide/inferenceport-ai-minimax-m3" },
-    { name: "pollinations-gemma-4-31b-it", type: "pollinations", model: "Bakhshi7889/gemma-4-   31b-it" },
+    { name: "pollinations-gemma-4-31b-it", type: "pollinations", model: "Bakhshi7889/gemma-4-31b-it" },
     { name: "pollinations-qwen-3.6-27b", type: "pollinations", model: "sharktide/inferenceport-ai-qwen-3.6-27b" },
     { name: "pollinations-kimi-k2.7-code", type: "pollinations", model: "sharktide/inferenceport-ai-kimi-k2.7-code" },    
     { name: "pollinations-kimi-2.5", type: "pollinations", model: "sharktide/inferenceport-ai-kimi-k2.5" },
