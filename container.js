@@ -21,7 +21,7 @@ async function initializeSandbox() {
 }
 }
 
-export async function runCommandInBoxyContainer(command) {
+export async function runCommandInBoxyContainer(command, isBoxyWebhook = false) {
   let isBusy = false;
   
       
@@ -39,7 +39,7 @@ export async function runCommandInBoxyContainer(command) {
           isBusy = true;
         }
       }
-  if (isBusy) {
+  if (isBusy && isBoxyWebhook) {
    
     return {
       stdout: "",
