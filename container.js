@@ -8,7 +8,7 @@ async function initializeSandbox() {
     sandbox = await Sandbox.create({
   name: "boxy-computer", 
   cpus: 1.0,
-  memoryMb: 2048,
+  memoryMb: 1024,
 });
   }
 }
