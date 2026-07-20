@@ -109,7 +109,7 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
     { name: "openrouter-gemma-4-31b-a4b-it", type: "openrouter", model: "google/gemma-4-31b-it:free" },
     { name: "pollinations-gemma-slightly-more-expensive", type: "pollinations", model: "MarcosFRG/gemma-4-31b" },
     { name: "cerebras-gemma-4-31b", type: "cerebras", model: "gemma-4-31b" },
-    { name: "pollinations-kimi-k3", type: "cerebras", model: "vendouple/kimi-k3" }
+    { name: "pollinations-kimi-k3", type: "pollinations", model: "vendouple/kimi-k3" }
   ];
 
   let lastError = null;
