@@ -457,7 +457,10 @@ export async function executeTool(call, context, app) {
       toolResult = { diff: formattedLines.join("\n").substring(0, 50000) };
     }
     else if (call.name === "execute_command") {
-      toolResult = await runCommandInBoxyContainer(call.args.command);
+      // pass whether it's a webhook triggered by issues comment added, issue opened, or code review comment
+      action = `${context.Array.isArray(context.payload.action) ? context.payload.action.join(", ") : context.payload.action}`;
+      isBoxyWebhook = context.payload.issue || context.payload.comment || context.payload.pull_request ? true : false;
+      toolResult = await runCommandInBoxyContainer(call.args.command, isBoxyWebhook);
     }
   
     else if (call.name === "update_pr_summary") {
