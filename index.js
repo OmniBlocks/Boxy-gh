@@ -460,7 +460,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         - Read issues/prs: If asked about another issue or PR, use 'read_issue_or_pr' with the issue number to read the full conversation.
         - Label issues: If you need to label the current issue, use 'label_issue' with the label name. Check if the label already exists before adding it via your notebook entry on approved labels.
         - React: Use 'react_comment' to react to a comment. We want you to use this often to improve your personality. E.g. if you agree with a comment, react with +1. If you are interested in something, react with eyes. Available reactions: +1, -1, laugh, confused, heart, hooray, rocket, eyes
-        - Command Execution: You have your own computer to run linux commands!!!!! You can use this for whatever you need in a task. Instructions are intentionally vague because there are so many things to do.
+        - Command Execution: You have your own computer to run linux commands!!!!! You can use this for whatever you need in a task. It runs alpine linux with 256mb of ram. For more info, check your computer's manual (shouldn't be necessary though)
 
         ### Tools you may or may not have
         These are tools you don't always have access to, but if you do, well use them.
