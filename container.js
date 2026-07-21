@@ -3,11 +3,30 @@ import { promisify } from "util";
 import { loadTodoList, loadReviews } from "./fs.js";
 
 const execAsync = promisify(exec);
+const CONTAINER_NAME = "boxy-runner";
+
+// Helper to ensure the persistent container is running
+async function ensureContainerRunning() {
+  try {
+    // Check if the container exists/is running
+    await execAsync(`docker inspect ${CONTAINER_NAME}`);
+  } catch (err) {
+    // Container doesn't exist, create and run it in detached mode (-d)
+    const createCmd = `docker run -d --name ${CONTAINER_NAME} \
+      --memory="256m" \
+      --memory-swap="256m" \
+      -e CI=true \
+      -v /home/gato/boxy-workspace:/workspace \
+      -w /workspace \
+      node:20-alpine tail -f /dev/null`;
+    
+    await execAsync(createCmd);
+  }
+}
 
 export async function runCommandInBoxyContainer(command, isBoxyWebhook = false) {
   let isBusy = false;
-  
-  
+
   const todoList = await loadTodoList();
   for (const [id, item] of Object.entries(todoList)) {
     if (!item.completed) {
@@ -22,7 +41,7 @@ export async function runCommandInBoxyContainer(command, isBoxyWebhook = false) 
       isBusy = true;
     }
   }
-  
+
   if (isBusy && isBoxyWebhook) {
     return {
       stdout: "",
@@ -31,14 +50,14 @@ export async function runCommandInBoxyContainer(command, isBoxyWebhook = false) 
     };
   }
 
-  // Escape double quotes inside the command so they don't break our bash wrapper
+  // Ensure persistent container exists before running command
+  await ensureContainerRunning();
+
+  // Escape double quotes safely
   const safeCommand = command.replace(/"/g, '\\"');
 
-  // -v /home/gato/boxy-workspace:/workspace mounts your safe sandbox playpen
-  // --memory="256m" limits RAM usage to prevent host crashes
-  // node:20-alpine is the super fast, pre-cached image
-    const dockerCmd = `docker run --rm --memory="256m" -e CI=true -v /home/gato/boxy-workspace:/workspace -w /workspace node:20-alpine /bin/sh -c "( ${safeCommand} ) < /dev/null"`;
-
+  // Execute inside the already running container
+  const dockerCmd = `docker exec ${CONTAINER_NAME} /bin/sh -c "( ${safeCommand} ) < /dev/null"`;
 
   try {
     const { stdout, stderr } = await execAsync(dockerCmd, { timeout: 1200000 });
