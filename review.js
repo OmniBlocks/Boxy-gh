@@ -4,7 +4,22 @@ import { loadReviews, saveReviews, loadNotebook, loadTodoList, loadStickyNotes }
 import { boxyReviewTools, executeTool, boxyWebhookTools } from './tools.js';
 
 export async function triggerCodeReview(context, app) {
-  const pr = context.payload.pull_request;
+  let pr;
+  try {
+    if (context.payload.issue) {
+      // This is an issue, so attempt to get the real PR.
+      const {owner, repo} = context.repo();
+      pr = await context.octokit.rest.pulls.get({
+        owner,
+        repo,
+        pull_number: context.payload.issue.number,
+      });
+    } else {
+      // Probably a PR, I dunno...
+      pr = context.payload.pull_request;
+    }
+  } catch { app.log.error(`cat knocked down your PR metadata vase? ฅ^•ﻌ•^ฅ ${error.message}`); }
+
   const author = pr.user.login;
   if (pr.user.type === "Bot" || author.includes("[bot]")) return;
 

@@ -300,10 +300,11 @@ async function startBackgroundQueue(app) {
 }
 
 
-async function boxyCommentorIssue(context, app) {
+async function boxyCommentorIssue(context, app, startCodeReview) {
   app.log.info("working...");
 
   const isDiscussion = context.name === "discussion_comment";
+  const isPullRequest = !!context.payload.issue.pull_request;
   const isIssueComment = context.name === "issue_comment";
   const isComment = isIssueComment || isDiscussion;
   const mentionHandle = "@OmniBlocks/boxy";
@@ -329,6 +330,11 @@ async function boxyCommentorIssue(context, app) {
   }
 
   if (!textBody.includes(mentionHandle) && isComment) return;
+
+  if (textBody.trim() === `${mentionHandle} review` && isPullRequest) {
+    await startCodeReview(context, app);
+    return;
+  }
 
   const cleanedComment = textBody.replace(/[.,#!$%\^&\*;:{}=\-_`~?]/g, "").trim();
   if (cleanedComment === mentionHandle) {
@@ -581,11 +587,6 @@ export default (app) => {
   startBackgroundQueue(app);
   complainIfSkillIssue(app);
 
-  app.on(["issue_comment.created", "discussion_comment.created", "issues.opened"], async (context) => {
-    boxyCommentorIssue(context, app);
-    return;
-  });
-
   async function preparePrContainer(context) {
     try {
       const pr = context.payload.pull_request;
@@ -612,10 +613,17 @@ export default (app) => {
     }
   }
 
-  app.on(["pull_request.opened", "pull_request.synchronize", "pull_request.reopened"], async (context) => {
+  async function startCodeReview(context, app) {
     await preparePrContainer(context);
     triggerCodeReview(context, app);
+  }
+
+  app.on(["issue_comment.created", "discussion_comment.created", "issues.opened"], async (context) => {
+    boxyCommentorIssue(context, app, startCodeReview);
+    return;
   });
+
+  app.on(["pull_request.opened", "pull_request.synchronize", "pull_request.reopened"], async (context) => await startCodeReview(context, app));
 
   app.on("pull_request.closed", async (context) => {
     await cleanupPrContainer(context);
