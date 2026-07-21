@@ -9,11 +9,13 @@ export async function triggerCodeReview(context, app) {
     if (context.payload.issue) {
       // This is an issue, so attempt to get the real PR.
       const {owner, repo} = context.repo();
-      pr = await context.octokit.rest.pulls.get({
+      const gottenPR = await context.octokit.rest.pulls.get({
         owner,
         repo,
         pull_number: context.payload.issue.number,
       });
+      if (!Object.hasOwn(gottenPR, 'data')) throw new Error('No data in pull request fetched for code review.')
+      pr = gottenPR.data;
     } else {
       // Probably a PR, I dunno...
       pr = context.payload.pull_request;
