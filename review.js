@@ -20,7 +20,7 @@ export async function triggerCodeReview(context, app) {
     }
   } catch (error) {
     app.log.error(`cat knocked down your PR metadata vase? ฅ^•ﻌ•^ฅ ${error.message}`);
-    return;
+    throw error; // Just throw it anyway for debugging purposes. :P
   }
 
   const author = pr.user.login;
