@@ -37,7 +37,8 @@ export async function runCommandInBoxyContainer(command, isBoxyWebhook = false) 
   // -v /home/gato/boxy-workspace:/workspace mounts your safe sandbox playpen
   // --memory="256m" limits RAM usage to prevent host crashes
   // node:20-alpine is the super fast, pre-cached image
-  const dockerCmd = `docker run --rm --memory="256m" -v /home/gato/boxy-workspace:/workspace -w /workspace node:20-alpine /bin/sh -c "${safeCommand}"`;
+    const dockerCmd = `docker run --rm --memory="256m" -e CI=true -v /home/gato/boxy-workspace:/workspace -w /workspace node:20-alpine /bin/sh -c "( ${safeCommand} ) < /dev/null"`;
+
 
   try {
     const { stdout, stderr } = await execAsync(dockerCmd, { timeout: 1200000 });
