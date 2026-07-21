@@ -40,7 +40,7 @@ export async function runCommandInBoxyContainer(command, isBoxyWebhook = false) 
   const dockerCmd = `docker run --rm --memory="256m" -v /home/gato/boxy-workspace:/workspace -w /workspace node:20-alpine /bin/sh -c "${safeCommand}"`;
 
   try {
-    const { stdout, stderr } = await execAsync(dockerCmd, { timeout: 120000 });
+    const { stdout, stderr } = await execAsync(dockerCmd, { timeout: 1200000 });
     return { stdout, stderr, exitCode: 0 };
   } catch (error) {
     return {
