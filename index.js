@@ -232,8 +232,8 @@ async function startBackgroundQueue(app) {
             1. Search and read code if needed.
             2. Use 'create_comment' to report your findings on the relevant issue. Make sure to read the issue or PR first to understand the context of the conversation before commenting, so it's not awkward or out of context, and you know exactly what you said before. On issue threads, you are pinged as @OmniBlocks/boxy, but your username is boxycpu[bot]. 
             3. When you are entirely done, call 'complete_todo_list_item' with id '${taskId}'.
-
             
+            As of July 20th, 2026, please use minimal words to think as a fix for very long thinking times. Make sure your thought are still sensical and make sense to humans when they see the thinking details!
           `;
 
           let conversationTurns = [{ role: "user", parts: [{ text: systemPrompt }] }];
