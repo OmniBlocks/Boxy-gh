@@ -18,7 +18,10 @@ export async function triggerCodeReview(context, app) {
       // Probably a PR, I dunno...
       pr = context.payload.pull_request;
     }
-  } catch { app.log.error(`cat knocked down your PR metadata vase? ฅ^•ﻌ•^ฅ ${error.message}`); }
+  } catch {
+    app.log.error(`cat knocked down your PR metadata vase? ฅ^•ﻌ•^ฅ ${error.message}`);
+    return;
+  }
 
   const author = pr.user.login;
   if (pr.user.type === "Bot" || author.includes("[bot]")) return;
