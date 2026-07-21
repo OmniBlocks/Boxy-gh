@@ -614,8 +614,20 @@ export default (app) => {
   }
 
   async function startCodeReview(context, app) {
-    await preparePrContainer(context);
-    triggerCodeReview(context, app);
+    try {
+      await preparePrContainer(context);
+      triggerCodeReview(context, app);
+    } catch (error) {
+      app.log.error("ERROR inside code review processing block:", error.message);
+      try {
+      return await createCommentForContext(context, "i broke while trying to code review 💔💔💔 you're stuck with clankerrabbit <details><summary>Error Details</summary><pre>" + (error.stack || error.message) + "</pre></details>");
+      } catch (err) {
+        app.log.error("code review has LITERALLY IMPLODED", err.message);
+        try {
+          return await createCommentForContext(context, "someone must have a REALLY BAD skill issue because I can't post the comment about the code review error 🫣");
+        } catch (err2) { app.log.error("code review has LITERALLY LITERALLY IMPLODED", err2.message); }
+      }
+    }
   }
 
   app.on(["issue_comment.created", "discussion_comment.created", "issues.opened"], async (context) => {
