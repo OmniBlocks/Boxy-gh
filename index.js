@@ -8,7 +8,6 @@ import { triggerCodeReview, handleWorkflowCompleted, handleReviewCommentReply } 
 const workflowEvents = new EventEmitter();
 
 
-
 async function complainIfSkillIssue(app) {
 try {
   const data = await fs.readFile(REVERT_FILE, "utf-8");
