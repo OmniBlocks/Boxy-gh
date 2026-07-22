@@ -300,6 +300,33 @@ async function startBackgroundQueue(app) {
   }
 }
 
+async function reactToUserComment(context, app, reaction) {
+  if (![
+    "+1",
+    "-1",
+    "laugh",
+    "confused",
+    "heart",
+    "hooray",
+    "rocket",
+    "eyes"
+  ].includes(reaction)) {
+    throw new Error("Invalid reaction passed to reactToUserComment.")
+  }
+
+  try {
+    const { owner, repo } = context.repo();
+    await context.octokit.rest.reactions.createForIssueComment({
+      owner,
+      repo,
+      comment_id: context.payload.comment.id,
+      content: reaction
+    })
+  } catch (error) {
+    // How amazing...
+    app.log.error(`Somebody messed up so bad that I couldn't even REACT to a comment: ${error.message}`)
+  }
+}
 
 async function boxyCommentorIssue(context, app, startCodeReview) {
   app.log.info("working...");
@@ -333,7 +360,11 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
   if (!textBody.includes(mentionHandle) && isComment) return;
 
   if (textBody.trim() === `${mentionHandle} review` && isPullRequest) {
-    await startCodeReview(context, app);
+    // Asynchronicity is beautiful, isn't it?
+    await Promise.all([
+      startCodeReview(context, app),
+      reactToUserComment(context, app, 'eyes'),
+    ]);
     return;
   }
 
