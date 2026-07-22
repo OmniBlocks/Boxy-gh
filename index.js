@@ -22,7 +22,6 @@ try {
 
 
 
-
   if (firstInstallation) {
     const octokit = await app.auth(firstInstallation.id);
      const commit = await octokit.rest.repos.getCommit({
