@@ -595,6 +595,7 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
           text: formattedText
         };
       }
+
       
       if (provider.type === "openrouter") {
         const messages = convertContentsToMessages(contents);
