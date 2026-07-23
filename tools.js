@@ -403,58 +403,67 @@ export async function executeTool(call, context, app) {
       });
       toolResult = { status: "success", comment_url: data.html_url };
     }
-    else if (call.name === "get_pr_diff") {
-      const diff = await context.octokit.rest.pulls.get({
-        owner, repo, pull_number: call.args.pull_number, mediaType: { format: "diff" }
+  else if (call.name === "get_pr_diff") {
+      const files = await context.octokit.paginate(context.octokit.rest.pulls.listFiles, {
+        owner,
+        repo,
+        pull_number: call.args.pull_number,
+        per_page: 100
       });
-      const lines = diff.data.split("\n");
-      const formattedLines = [];
-      let inHunk = false;
-      let oldLine = 0;
-      let newLine = 0;
 
-      for (const line of lines) {
-        // If we hit file metadata, we aren't in a hunk
-        if (line.startsWith("diff --git") ||
-          line.startsWith("---") ||
-          line.startsWith("+++") ||
-          line.startsWith("index") ||
-          line.startsWith("new file mode") ||
-          line.startsWith("deleted file mode")) {
-          inHunk = false;
-          formattedLines.push(line);
+      const IGNORED_FILES = ["pnpm-lock.yaml", "package-lock.json", "yarn.lock"];
+      const formattedLines = []; 
+      for (const file of files) {
+        if (IGNORED_FILES.includes(file.filename)) continue;
+
+        formattedLines.push(`diff --git a/${file.filename} b/${file.filename}`);
+        formattedLines.push(`--- a/${file.filename}`);
+        formattedLines.push(`+++ b/${file.filename}`);
+
+        if (!file.patch) {
+          formattedLines.push("[Binary or empty patch]");
           continue;
         }
-        if (line.startsWith("@@")) {
-          inHunk = true;
-          formattedLines.push(line);
 
-          const match = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
-          if (match) {
-            oldLine = parseInt(match[1], 10);
-            newLine = parseInt(match[2], 10);
+        const lines = file.patch.split("\n");
+        let inHunk = false;
+        let oldLine = 0;
+        let newLine = 0;
+
+        for (const line of lines) {
+          if (line.startsWith("@@")) {
+            inHunk = true;
+            formattedLines.push(line);
+
+            const match = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+            if (match) {
+              oldLine = parseInt(match[1], 10);
+              newLine = parseInt(match[2], 10);
+            }
+            continue;
           }
-          continue;
-        }
 
-        if (inHunk) {
-          if (line.startsWith("+")) {
-            formattedLines.push(`[L${newLine}] ${line}`);
-            newLine++;
-          } else if (line.startsWith("-")) {
-            formattedLines.push(`[Del] ${line}`);
-            oldLine++;
-          } else if (line.startsWith(" ") || line === "") {
-            formattedLines.push(`[L${newLine}] ${line}`);
-            newLine++;
-            oldLine++;
+          if (inHunk) {
+            if (line.startsWith("+")) {
+              formattedLines.push(`[L${newLine}] ${line}`);
+              newLine++;
+            } else if (line.startsWith("-")) {
+              formattedLines.push(`[Del] ${line}`);
+              oldLine++;
+            } else if (line.startsWith(" ") || line === "") {
+              formattedLines.push(`[L${newLine}] ${line}`);
+              newLine++;
+              oldLine++;
+            } else {
+              formattedLines.push(line);
+            }
           } else {
             formattedLines.push(line);
           }
-        } else {
-          formattedLines.push(line);
         }
       }
+
+       
       toolResult = { diff: formattedLines.join("\n").substring(0, 50000) };
     }
     else if (call.name === "execute_command") {
