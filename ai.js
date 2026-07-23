@@ -93,6 +93,7 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
     { name: "gemini-3.5-flash-backup", type: "google", model: "gemini-3.5-flash", useBackup: true },
     { name: "gemma-4-26b-a4b-it-backup", type: "google", model: "gemma-4-26b-a4b-it", useBackup: true },
     { name: "gemma-4-31b-it-backup", type: "google", model: "gemma-4-31b-it", useBackup: true },
+    { name: "mistral-codestral", type: "mistral", model: "codestral-latest", useBackup: false },
     { name: "pollinations-ultra-fast-gemma", type: "pollinations", model: "tomdacatto/gemma-4-31b-fast" },
     { name: "pollinations-agnes-1.5-flash", type: "pollinations", model: "Catniti/agnes-1.5-flash" },
     { name: "pollinations-minimax-m3-31b", type: "pollinations", model: "sharktide/inferenceport-ai-minimax-m3" },
@@ -480,7 +481,121 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
         };
       }
 
+      if (provider.type === "mistral") {
+        if (!process.env.MISTRAL_API_KEY) {
+          continue;
+        }
 
+        const messages = convertContentsToMessages(contents);
+        const body = {
+          model: provider.model,
+          messages: messages
+        };
+
+        if (tools && tools.length > 0) {
+          body.tools = tools.map(t => {
+            const props = {};
+            for (const [k, v] of Object.entries(t.parameters?.properties || {})) {
+              props[k] = { ...v };
+              if (typeof props[k].type === 'string') {
+                props[k].type = props[k].type.toLowerCase();
+              }
+              if (props[k].items && typeof props[k].items.type === 'string') {
+                props[k].items = { ...props[k].items, type: props[k].items.type.toLowerCase() };
+              }
+            }
+            return {
+              type: "function",
+              function: {
+                name: t.name,
+                description: t.description || "",
+                parameters: {
+                  type: "object",
+                  properties: props,
+                  required: t.parameters?.required || []
+                }
+              }
+            };
+          });
+          body.tool_choice = "auto";
+        }
+
+        const headers = {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.MISTRAL_API_KEY}`
+        };
+
+        const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body)
+        });
+
+        if (!res.ok) {
+          throw new Error(`Mistral Status ${res.status}: ${await res.text()}`);
+        }
+
+        const data = await res.json();
+        const choice = data.choices?.[0];
+        const message = choice?.message;
+
+        if (!message) {
+          throw new Error("Empty choice content received from Mistral API");
+        }
+
+        const text = message.content || "";
+        const functionCalls = [];
+        const parts = [];
+
+        if (message.tool_calls && message.tool_calls.length > 0) {
+          for (const tc of message.tool_calls) {
+            if (tc.type === "function") {
+              let parsedArgs = {};
+              try {
+                parsedArgs = typeof tc.function.arguments === "string"
+                  ? JSON.parse(tc.function.arguments)
+                  : tc.function.arguments;
+              } catch (e) {
+                parsedArgs = tc.function.arguments;
+              }
+              const fc = {
+                name: tc.function.name,
+                args: parsedArgs,
+                id: tc.id
+              };
+              functionCalls.push(fc);
+              parts.push({ functionCall: fc });
+            }
+          }
+        } else {
+          parts.push({ text });
+        }
+
+        if (functionCalls.length === 0) {
+          throwIfEmptyModelResponse(text, `Mistral provider ${provider.name}`);
+        }
+
+        const elapsedSeconds = getElapsedSeconds(startTime);
+        const formattedText = sanitizeModelCommentText(text, elapsedSeconds);
+        const contextParts = parts.map(part => (
+          part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
+        ));
+
+        return {
+          functionCalls,
+          candidates: [
+            {
+              content: {
+                role: "model",
+                parts: contextParts
+              },
+              finishReason: choice.finish_reason === "stop" ? "STOP" : (choice.finish_reason === "tool_calls" ? "STOP" : choice.finish_reason)
+            }
+          ],
+          text: formattedText
+        };
+      }
+      
       if (provider.type === "openrouter") {
         const messages = convertContentsToMessages(contents);
 
