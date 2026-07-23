@@ -111,7 +111,7 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
     { name: "cerebras-gemma-4-31b", type: "cerebras", model: "gemma-4-31b" },
     { name: "pollinations-kimi-k3", type: "pollinations", model: "vendouple/kimi-k3" },
     { name: "hyperbolic-llama-3.3-70b", type: "hyperbolic", model: "meta-llama/Llama-3.3-70B-Instruct" },
-    { name: "siliconflow-qwen-2.5-72b", type: "siliconflow", model: "Qwen/Qwen2.5-72B-Instruct" }
+    //{ name: "siliconflow-qwen-2.5-72b", type: "siliconflow", model: "Qwen/Qwen2.5-72B-Instruct" }
   ];
 
   let lastError = null;
