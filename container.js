@@ -8,6 +8,9 @@ const isContainerEnabled = false;
 
 // Helper to ensure the persistent container is running
 async function ensureContainerRunning() {
+    if (!isContainerEnabled){
+        return;
+  }
   try {
     // Check if the container exists/is running
     await execAsync(`docker inspect ${CONTAINER_NAME}`);
@@ -22,6 +25,21 @@ async function ensureContainerRunning() {
       node:20-alpine tail -f /dev/null`;
     
     await execAsync(createCmd);
+  }
+}
+
+// Helper to shut down the container if it's running
+async function stopContainerIfNeeded() {
+  if (!isContainerEnabled) {
+    return;
+  }
+  try {
+    // Check if container exists before trying to stop/remove it
+    await execAsync(`docker inspect ${CONTAINER_NAME}`);
+    await execAsync(`docker stop ${CONTAINER_NAME}`);
+    await execAsync(`docker rm ${CONTAINER_NAME}`);
+  } catch (err) {
+    // Container doesn't exist or isn't running, ignore
   }
 }
 
@@ -76,5 +94,10 @@ export async function runCommandInBoxyContainer(command, isBoxyWebhook = false) 
       stderr: error.stderr || error.message,
       exitCode: error.code || 1
     };
+  } finally {
+    // Shut down the container when it isn't being used
+    if (!isBusy) {
+      await stopContainerIfNeeded();
+    }
   }
 }
