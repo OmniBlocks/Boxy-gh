@@ -236,7 +236,8 @@ export const boxyReviewTools = [
   updatePrSummaryDeclaration,
   createInlineCommentDeclaration,
   finishPrReviewDeclaration,
-  executeCommandDeclaration
+  executeCommandDeclaration,
+ closeOrOpenIssueDeclaration
 ];
 export const boxyWebhookTools = [
   readMemoryDeclaration,
@@ -263,7 +264,7 @@ export const boxyBackgroundTools = [
   saveTodoListItemDeclaration,
   completeTodoListItemDeclaration,
   createCommentDeclaration,
-  executeCommandDeclaration
+  //executeCommandDeclaration
 ];
 export async function executeTool(call, context, app) {
   let toolResult = {};
