@@ -739,14 +739,8 @@ export default (app) => {
     handleReviewCommentReply(context, app);
   });
   } catch (e) {
-const trace = e.trace || e.message;
+const trace = e.stack || e.message;
 app.log.error(trace, "AN ERROR OCCURRED");
-
-await context.octokit.issues.create({
-  owner: "OmniBlocks",
-  repo: "Boxy-gh",
-  title: "rest in pieces",
-  body: `An error occurred in Boxy:\n\n\`\`\`text\n${trace}\n\`\`\``
-});
+ process.exit(1);
   }
 };
