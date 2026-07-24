@@ -615,6 +615,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
  * @param {import('probot').Probot} app
  */
 export default (app) => { 
+  try {
   startBackgroundQueue(app);
   complainIfSkillIssue(app);
 
@@ -737,4 +738,15 @@ export default (app) => {
   app.on("pull_request_review_comment.created", async (context) => {
     handleReviewCommentReply(context, app);
   });
+  } catch (e) {
+const trace = e.trace || e.message;
+app.log.error(trace, "AN ERROR OCCURRED");
+
+await context.octokit.issues.create({
+  owner: "OmniBlocks",
+  repo: "Boxy-gh",
+  title: "rest in pieces",
+  body: `An error occurred in Boxy:\n\n\`\`\`text\n${trace}\n\`\`\``
+});
+  }
 };
