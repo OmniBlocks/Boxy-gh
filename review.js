@@ -167,7 +167,7 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
 
     Work on this task using your tools. Take your time.
     1. First, use 'get_pr_diff' to read the changes. 
-    2. Traverse the codebase if needed using 'search_code' and 'read_file' to ensure you understand how the changes interact. However, you must remember that only the diff tool gives you the actual PR diff. Read_file and search_code only get the main branch code. Read project rules using 'read_memory'. When reading test results, do NOT flag style-related linting, like whitespace or formatting issues. We, respectfully, do NOT care unless it is a genuine bug that can mess up the functionality of the code. Now, if it does affect the functionality, then explain the error from the test/logs in your review. You have your own computer to run whatever commands you want (via execute_command tool), such as git cloning the repo and pulling it to review the branch offline. However, your computer only has 256mb of RAM, so do NOT run any intensive commands like actually installing or building or testing (basically any pnpm commands), that is why the CI logs are given to you (if available)
+    2. Traverse the codebase if needed using 'search_code' and 'read_file' to ensure you understand how the changes interact. However, you must remember that only the diff tool gives you the actual PR diff. Read_file and search_code only get the main branch code. Read project rules using 'read_memory'. When reading test results, do NOT flag style-related linting, like whitespace or formatting issues. We, respectfully, do NOT care unless it is a genuine bug that can mess up the functionality of the code. This applies to PR titles and descriptions as well, so do not be pedantic and flag a PR for having a "vague" description of title. We DON'T care. Now, if it does affect the functionality, then explain the error from the test/logs in your review. You have your own computer to run whatever commands you want (via execute_command tool), such as git cloning the repo and pulling it to review the branch offline. However, your computer only has 256mb of RAM, so do NOT run any intensive commands like actually installing or building or testing (basically any pnpm commands), that is why the CI logs are given to you (if available)
     3. Update the main status comment using 'update_pr_summary'. The comment ID is ${reviewState.comment_id}. 
        You MUST format this comment exactly like this:
        - A detailed SUMMARY FIRST.
@@ -205,7 +205,7 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
     response = await callAIWithFallback({ ai, contents: conversationTurns, tools: boxyReviewTools, appLog: app.log });
     loopCount++;
   }
-  
+
 }
 export async function handleReviewCommentReply(context, app) {
   const comment = context.payload.comment;
