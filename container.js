@@ -4,6 +4,7 @@ import { loadTodoList, loadReviews } from "./fs.js";
 
 const execAsync = promisify(exec);
 const CONTAINER_NAME = "boxy-runner";
+const isContainerEnabled = false;
 
 // Helper to ensure the persistent container is running
 async function ensureContainerRunning() {
@@ -25,6 +26,13 @@ async function ensureContainerRunning() {
 }
 
 export async function runCommandInBoxyContainer(command, isBoxyWebhook = false) {
+  if (!isContainerEnabled){
+        return {
+      stdout: "",
+      stderr: "Boxy container is currently disabled.",
+      exitCode: 1,
+    };
+  }
   let isBusy = false;
 
   const todoList = await loadTodoList();
