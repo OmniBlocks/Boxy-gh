@@ -77,6 +77,7 @@ const searchCodeDeclaration = {
     required: ["query"],
   },
 };
+
 const readFileDeclaration = {
   name: "read_file",
   description: "Read the exact contents of a specific file or list the contents of a directory in the repository.",
@@ -88,6 +89,62 @@ const readFileDeclaration = {
     required: ["path"],
   },
 };
+
+const searchExternalRepoCodeDeclaration = {
+  name: "search_external_repo_code",
+  description:
+    "Search tracked code in another GitHub repository that this GitHub App can read. This is read-only.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      owner: {
+        type: Type.STRING,
+        description:
+          "GitHub organization or user that owns the target repository.",
+      },
+      repo: {
+        type: Type.STRING,
+        description: "Target GitHub repository name.",
+      },
+      query: {
+        type: Type.STRING,
+        description: "Literal code text to search for.",
+      },
+    },
+    required: ["owner", "repo", "query"],
+  },
+};
+
+const readExternalRepoFileDeclaration = {
+  name: "read_external_repo_file",
+  description:
+    "Read a tracked file or directory from another GitHub repository that this GitHub App can read. This is read-only.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      owner: {
+        type: Type.STRING,
+        description:
+          "GitHub organization or user that owns the target repository.",
+      },
+      repo: {
+        type: Type.STRING,
+        description: "Target GitHub repository name.",
+      },
+      path: {
+        type: Type.STRING,
+        description: "Repository-relative file or directory path.",
+      },
+      ref: {
+        type: Type.STRING,
+        description:
+          "Optional branch, tag, or commit SHA. Defaults to the repository default branch.",
+      },
+    },
+    required: ["owner", "repo", "path"],
+  },
+};
+
 const readIssueOrPrDeclaration = {
   name: "read_issue_or_pr",
   description: "Read the title, description, and comments of a specific issue or pull request.",
@@ -244,19 +301,23 @@ export const boxyWebhookTools = [
   saveMemoryDeclaration,
   searchCodeDeclaration,
   readFileDeclaration,
+  searchExternalRepoCodeDeclaration,
+  readExternalRepoFileDeclaration,
   readIssueOrPrDeclaration,
   saveStickyNoteDeclaration,
   closeOrOpenIssueDeclaration,
   labelIssueDeclaration,
   saveTodoListItemDeclaration,
   reactCommentDeclaration,
-  executeCommandDeclaration
+  //executeCommandDeclaration,
 ];
 export const boxyBackgroundTools = [
   readMemoryDeclaration,
   saveMemoryDeclaration,
   searchCodeDeclaration,
   readFileDeclaration,
+  searchExternalRepoCodeDeclaration,
+  readExternalRepoFileDeclaration,
   readIssueOrPrDeclaration,
   saveStickyNoteDeclaration,
   closeOrOpenIssueDeclaration,
@@ -266,6 +327,54 @@ export const boxyBackgroundTools = [
   createCommentDeclaration,
   //executeCommandDeclaration
 ];
+
+const REPO_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+const REF = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$/;
+
+function requireExternalRepository(owner, repo) {
+  if (
+    typeof owner !== "string" ||
+    typeof repo !== "string" ||
+    !REPO_IDENTIFIER.test(owner) ||
+    !REPO_IDENTIFIER.test(repo)
+  ) {
+    throw new Error("A valid GitHub repository owner and name are required.");
+  }
+
+  return { owner, repo };
+}
+
+function requireRepositoryPath(path) {
+  if (
+    typeof path !== "string" ||
+    path.length === 0 ||
+    path.length > 500 ||
+    path.startsWith("/") ||
+    path.includes("\0") ||
+    path.split("/").some((part) => part === "..")
+  ) {
+    throw new Error("A valid repository-relative path is required.");
+  }
+
+  return path;
+}
+
+function requireRef(ref) {
+  if (ref === undefined) return undefined;
+
+  if (
+    typeof ref !== "string" ||
+    !REF.test(ref) ||
+    ref.includes("..") ||
+    ref.includes("//") ||
+    ref.endsWith("/")
+  ) {
+    throw new Error("A valid Git ref is required.");
+  }
+
+  return ref;
+}
+
 export async function executeTool(call, context, app) {
   let toolResult = {};
   const { owner, repo } = context.repo();
@@ -274,49 +383,147 @@ export async function executeTool(call, context, app) {
     if (call.name === "read_memory") {
       const currentNotebook = await loadNotebook();
       const content = currentNotebook[call.args.title];
-      toolResult = content ? { content } : { error: `Memory '${call.args.title}' not found.` };
-    }
-    else if (call.name === "save_memory") {
+      toolResult = content
+        ? { content }
+        : { error: `Memory '${call.args.title}' not found.` };
+    } else if (call.name === "save_memory") {
       await saveMemoryToFile(call.args.title, call.args.content);
-      toolResult = { status: "success", message: `Saved '${call.args.title}'!` };
-    }
-    else if (call.name === "save_sticky_note") {
+      toolResult = {
+        status: "success",
+        message: `Saved '${call.args.title}'!`,
+      };
+    } else if (call.name === "save_sticky_note") {
       const { title, content } = call.args;
       await saveStickyNoteToFile(title, content);
-      toolResult = { status: "success", message: `Sticky note '${title}' successfully saved.` };
-    }
-    else if (call.name === "search_code") {
+      toolResult = {
+        status: "success",
+        message: `Sticky note '${title}' successfully saved.`,
+      };
+    } else if (call.name === "search_code") {
       const safeQuery = `${call.args.query} repo:${owner}/${repo}`;
-      const searchResult = await context.octokit.rest.search.code({ q: safeQuery, per_page: 5 });
+      const searchResult = await context.octokit.rest.search.code({
+        q: safeQuery,
+        per_page: 5,
+      });
       if (searchResult.data.items.length === 0) {
         toolResult = { message: "No code found matching that query." };
       } else {
-        toolResult = { files_found: searchResult.data.items.map(i => i.path) };
+        toolResult = {
+          files_found: searchResult.data.items.map((i) => i.path),
+        };
       }
-    }
-    else if (call.name === "read_file") {
+    } else if (call.name === "read_file") {
       const { data } = await context.octokit.rest.repos.getContent({
-        owner, repo, path: call.args.path
+        owner,
+        repo,
+        path: call.args.path,
       });
       if (Array.isArray(data)) {
-        toolResult = { type: "directory", files: data.map(f => f.path) };
+        toolResult = { type: "directory", files: data.map((f) => f.path) };
       } else if (data.type === "file") {
-        const decodedContent = Buffer.from(data.content, "base64").toString("utf8");
+        const decodedContent = Buffer.from(data.content, "base64").toString(
+          "utf8",
+        );
         const MAX_CHARS = 25000;
         toolResult = {
           type: "file",
           path: data.path,
-          content: decodedContent.length > MAX_CHARS
-            ? decodedContent.substring(0, MAX_CHARS) + "\n\n... [FILE TRUNCATED FOR SIZE]"
-            : decodedContent
+          content:
+            decodedContent.length > MAX_CHARS
+              ? decodedContent.substring(0, MAX_CHARS) +
+                "\n\n... [FILE TRUNCATED FOR SIZE]"
+              : decodedContent,
         };
       }
-    }
-    else if (call.name === "read_issue_or_pr") {
+    } else if (call.name === "search_external_repo_code") {
+      const { owner: targetOwner, repo: targetRepo } =
+        requireExternalRepository(call.args.owner, call.args.repo);
+
+      const query = String(call.args.query ?? "").trim();
+      if (query.length === 0 || query.length > 200) {
+        throw new Error("Search query must contain 1 to 200 characters.");
+      }
+
+      // Quote user input so it is searched as literal text rather than
+      // allowing GitHub code-search qualifiers such as `repo:other/repo`.
+      const literalQuery = query.replaceAll('"', '\\"');
+
+      try {
+        const searchResult = await context.octokit.rest.search.code({
+          q: `"${literalQuery}" repo:${targetOwner}/${targetRepo}`,
+          per_page: 5,
+        });
+
+        toolResult =
+          searchResult.data.items.length === 0
+            ? { message: "No code found matching that query." }
+            : {
+                repository: `${targetOwner}/${targetRepo}`,
+                files_found: searchResult.data.items.map((item) => item.path),
+              };
+      } catch (error) {
+        if (error.status === 403 || error.status === 404) {
+          toolResult = {
+            error: "The requested repository or resource is unavailable.",
+          };
+        } else {
+          throw error;
+        }
+      }
+    } else if (call.name === "read_external_repo_file") {
+      const { owner: targetOwner, repo: targetRepo } =
+        requireExternalRepository(call.args.owner, call.args.repo);
+      const path = requireRepositoryPath(call.args.path);
+      const ref = requireRef(call.args.ref);
+
+      try {
+        const { data } = await context.octokit.rest.repos.getContent({
+          owner: targetOwner,
+          repo: targetRepo,
+          path,
+          ...(ref ? { ref } : {}),
+        });
+
+        if (Array.isArray(data)) {
+          toolResult = {
+            type: "directory",
+            repository: `${targetOwner}/${targetRepo}`,
+            files: data.map((file) => file.path),
+          };
+        } else if (data.type === "file") {
+          const decodedContent = Buffer.from(data.content, "base64").toString(
+            "utf8",
+          );
+          const MAX_CHARS = 25000;
+
+          toolResult = {
+            type: "file",
+            repository: `${targetOwner}/${targetRepo}`,
+            path: data.path,
+            content:
+              decodedContent.length > MAX_CHARS
+                ? `${decodedContent.substring(0, MAX_CHARS)}\n\n... [FILE TRUNCATED FOR SIZE]`
+                : decodedContent,
+          };
+        } else {
+          toolResult = {
+            error: "The requested path is not a readable text file.",
+          };
+        }
+      } catch (error) {
+        if (error.status === 403 || error.status === 404) {
+          toolResult = {
+            error: "The requested repository or resource is unavailable.",
+          };
+        } else {
+          throw error;
+        }
+      }
+    } else if (call.name === "read_issue_or_pr") {
       const issueNum = call.args.issue_number;
       const repoCandidates = [
         { owner, repo },
-        ...(context.repoCandidates || [])
+        ...(context.repoCandidates || []),
       ];
       let targetIssue;
       let targetComments;
@@ -327,13 +534,13 @@ export async function executeTool(call, context, app) {
           targetIssue = await context.octokit.rest.issues.get({
             owner: candidate.owner,
             repo: candidate.repo,
-            issue_number: issueNum
+            issue_number: issueNum,
           });
           targetComments = await context.octokit.rest.issues.listComments({
             owner: candidate.owner,
             repo: candidate.repo,
             issue_number: issueNum,
-            per_page: 100
+            per_page: 100,
           });
           resolvedRepo = candidate;
           break;
@@ -345,11 +552,16 @@ export async function executeTool(call, context, app) {
       }
 
       if (!targetIssue || !targetComments) {
-        throw new Error(`Issue or PR #${issueNum} was not found in any accessible repository.`);
+        throw new Error(
+          `Issue or PR #${issueNum} was not found in any accessible repository.`,
+        );
       }
 
       if (typeof context.repo === "function") {
-        context.repo = () => ({ owner: resolvedRepo.owner, repo: resolvedRepo.repo });
+        context.repo = () => ({
+          owner: resolvedRepo.owner,
+          repo: resolvedRepo.repo,
+        });
       }
 
       let threadContent = `Title: ${targetIssue.data.title}\nState: ${targetIssue.data.state}\nAuthor: ${targetIssue.data.user?.login}\nBody:\n${targetIssue.data.body || "No description."}\n\n=== COMMENTS ===\n`;
@@ -360,60 +572,75 @@ export async function executeTool(call, context, app) {
       toolResult = {
         type: "issue_thread",
         issue_number: issueNum,
-        content: threadContent.length > MAX_CHARS
-          ? threadContent.substring(0, MAX_CHARS) + "\n\n... [THREAD TRUNCATED FOR SIZE]"
-          : threadContent
+        content:
+          threadContent.length > MAX_CHARS
+            ? threadContent.substring(0, MAX_CHARS) +
+              "\n\n... [THREAD TRUNCATED FOR SIZE]"
+            : threadContent,
       };
-    }
-    else if (call.name === "label_issue") {
+    } else if (call.name === "label_issue") {
       const label = call.args.label;
       await labelIssue(context, label);
-      toolResult = { status: "success", message: `Label '${label}' added to the issue.` };
-    }
-    else if (call.name === "close_or_open_issue") {
+      toolResult = {
+        status: "success",
+        message: `Label '${label}' added to the issue.`,
+      };
+    } else if (call.name === "close_or_open_issue") {
       const state = call.args.state;
       const state_reason = call.args.state_reason || null;
       toolResult = await issueCloseOrOpen(context, state, state_reason);
-    }
-    else if (call.name === "save_todo_list_item") {
+    } else if (call.name === "save_todo_list_item") {
       const { title, description } = call.args;
       await createTodoListItem(title, description, {
         sourceRepoOwner: context.repo().owner,
         sourceRepoName: context.repo().repo,
-        sourceIssueNumber: context.payload.issue?.number || context.payload.pull_request?.number || null,
-        sourceInstallationId: context.payload.installation?.id || null
+        sourceIssueNumber:
+          context.payload.issue?.number ||
+          context.payload.pull_request?.number ||
+          null,
+        sourceInstallationId: context.payload.installation?.id || null,
       });
-      toolResult = { status: "success", message: `To-do item '${title}' added.` };
-    }
-
-    else if (call.name === "complete_todo_list_item") {
+      toolResult = {
+        status: "success",
+        message: `To-do item '${title}' added.`,
+      };
+    } else if (call.name === "complete_todo_list_item") {
       const todoList = await loadTodoList();
       if (todoList[call.args.id]) {
         todoList[call.args.id].completed = true;
         await saveTodoList(todoList);
-        toolResult = { status: "success", message: "Task marked as completed." };
+        toolResult = {
+          status: "success",
+          message: "Task marked as completed.",
+        };
       } else {
         toolResult = { error: `Task ID ${call.args.id} not found.` };
       }
-    }
-    else if (call.name === "create_comment") {
+    } else if (call.name === "create_comment") {
       const { data } = await context.octokit.rest.issues.createComment({
-        owner, repo,
-        issue_number: call.args.issue_number,
-        body: call.args.body
-      });
-      toolResult = { status: "success", comment_url: data.html_url };
-    }
-  else if (call.name === "get_pr_diff") {
-      const files = await context.octokit.paginate(context.octokit.rest.pulls.listFiles, {
         owner,
         repo,
-        pull_number: call.args.pull_number,
-        per_page: 100
+        issue_number: call.args.issue_number,
+        body: call.args.body,
       });
+      toolResult = { status: "success", comment_url: data.html_url };
+    } else if (call.name === "get_pr_diff") {
+      const files = await context.octokit.paginate(
+        context.octokit.rest.pulls.listFiles,
+        {
+          owner,
+          repo,
+          pull_number: call.args.pull_number,
+          per_page: 100,
+        },
+      );
 
-      const IGNORED_FILES = ["pnpm-lock.yaml", "package-lock.json", "yarn.lock"];
-      const formattedLines = []; 
+      const IGNORED_FILES = [
+        "pnpm-lock.yaml",
+        "package-lock.json",
+        "yarn.lock",
+      ];
+      const formattedLines = [];
       for (const file of files) {
         if (IGNORED_FILES.includes(file.filename)) continue;
 
@@ -464,35 +691,41 @@ export async function executeTool(call, context, app) {
         }
       }
 
-       
       toolResult = { diff: formattedLines.join("\n").substring(0, 50000) };
-    }
-    else if (call.name === "execute_command") {
+    } else if (call.name === "execute_command") {
       // pass whether it's a webhook triggered by issues comment added, issue opened, or code review comment
       let isBoxyWebhook = false;
       try {
-      let action = `${context.name}.${context.payload.action}`;
-       isBoxyWebhook = action.startsWith("issues.") || action.startsWith("pull_request.") || action.startsWith("issue_comment.");
+        let action = `${context.name}.${context.payload.action}`;
+        isBoxyWebhook =
+          action.startsWith("issues.") ||
+          action.startsWith("pull_request.") ||
+          action.startsWith("issue_comment.");
       } catch (error) {
-      app.log.info("hurray");
+        app.log.info("hurray");
       }
       app.log.info(`Boxy ran command: ${call.args.command}`);
-      toolResult = await runCommandInBoxyContainer(call.args.command, isBoxyWebhook);
+      toolResult = await runCommandInBoxyContainer(
+        call.args.command,
+        isBoxyWebhook,
+      );
       app.log.info(`Boxy command result: ${JSON.stringify(toolResult)}`);
-    }
-  
-    else if (call.name === "update_pr_summary") {
-      await context.octokit.rest.issues.updateComment({ owner, repo, comment_id: call.args.comment_id, body: call.args.body });
+    } else if (call.name === "update_pr_summary") {
+      await context.octokit.rest.issues.updateComment({
+        owner,
+        repo,
+        comment_id: call.args.comment_id,
+        body: call.args.body,
+      });
       toolResult = { status: "success" };
-    }
-    else if (call.name === "create_inline_comment") {
+    } else if (call.name === "create_inline_comment") {
       const reviews = await loadReviews();
       const prKey = call.args.pull_number.toString();
       const commentObj = {
         path: call.args.path,
         line: call.args.line,
         side: "RIGHT",
-        body: call.args.body
+        body: call.args.body,
       };
 
       if (call.args.start_line && call.args.start_line < call.args.line) {
@@ -508,12 +741,18 @@ export async function executeTool(call, context, app) {
         await saveReviews(reviews);
       }
 
-      toolResult = { status: "success", message: "Inline comment drafted. It will be posted when finish_pr_review is called." };
-    }
-    else if (call.name === "finish_pr_review") {
+      toolResult = {
+        status: "success",
+        message:
+          "Inline comment drafted. It will be posted when finish_pr_review is called.",
+      };
+    } else if (call.name === "finish_pr_review") {
       const reviews = await loadReviews();
       const prKey = call.args.pull_number.toString();
-      const draftComments = (reviews[prKey] && reviews[prKey].draft_comments) ? reviews[prKey].draft_comments : [];
+      const draftComments =
+        reviews[prKey] && reviews[prKey].draft_comments
+          ? reviews[prKey].draft_comments
+          : [];
 
       await context.octokit.rest.pulls.createReview({
         owner,
@@ -521,7 +760,7 @@ export async function executeTool(call, context, app) {
         pull_number: call.args.pull_number,
         event: call.args.event,
         body: call.args.body,
-        comments: draftComments
+        comments: draftComments,
       });
 
       if (reviews[prKey]) {
@@ -532,21 +771,21 @@ export async function executeTool(call, context, app) {
       toolResult = { status: "review_completed" };
     } else if (call.name === "react_comment") {
       const { comment_id, reaction } = call.args;
-      
-      const { data } = await context.octokit.rest.reactions.createForIssueComment({
-        owner,
-        repo,
-        comment_id,
-        content: reaction // GitHub API uses 'content' for the reaction string
-      });
 
-      toolResult = { 
-        status: "success", 
+      const { data } =
+        await context.octokit.rest.reactions.createForIssueComment({
+          owner,
+          repo,
+          comment_id,
+          content: reaction, // GitHub API uses 'content' for the reaction string
+        });
+
+      toolResult = {
+        status: "success",
         message: `Successfully reacted with '${reaction}' to comment ${comment_id}.`,
-        reaction_id: data.id 
+        reaction_id: data.id,
       };
-    } 
-    else {
+    } else {
       toolResult = { error: "Tool does not exist" };
     }
   } catch (err) {
