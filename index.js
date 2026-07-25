@@ -334,7 +334,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
   const isPullRequest = !!context.payload.issue.pull_request;
   const isIssueComment = context.name === "issue_comment";
   const isComment = isIssueComment || isDiscussion;
-  const mentionHandle = "@OmniBlocks/boxy";
+  const mentionHandle = process.env.BOXY_MENTION_HANDLE || "@OmniBlocks/boxy";
 
   const author = isComment
     ? context.payload.comment.user.login
