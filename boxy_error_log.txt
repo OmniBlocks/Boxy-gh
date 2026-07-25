@@ -105,3 +105,44 @@
     at async boxyCommentorIssue (file:///C:/Users/voidc/Downloads/omniblocks/boxy/boxy/index.js:528:18)
 
 }
+
+2026-07-25T22:27:11.737Z - something is LITERALLY LITERALLY broke: HttpError: A JSON web token could not be decoded - https://docs.github.com/rest
+    at fetchWrapper (file:///home/jailuser/git/node_modules/.pnpm/@octokit+request@10.0.11/node_modules/@octokit/request/dist-bundle/index.js:124:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async hook (file:///home/jailuser/git/node_modules/.pnpm/@octokit+auth-app@8.2.0/node_modules/@octokit/auth-app/dist-node/index.js:369:18)
+    at async getInstallationAuthenticationImpl (file:///home/jailuser/git/node_modules/.pnpm/@octokit+auth-app@8.2.0/node_modules/@octokit/auth-app/dist-node/index.js:248:7)
+    at async hook (file:///home/jailuser/git/node_modules/.pnpm/@octokit+auth-app@8.2.0/node_modules/@octokit/auth-app/dist-node/index.js:398:32)
+    at async createCommentForContext (file:///home/jailuser/git/index.js:166:10)
+    at async boxyCommentorIssue (file:///home/jailuser/git/index.js:597:20)
+ other error logs: {error1: HttpError: A JSON web token could not be decoded - https://docs.github.com/rest
+    at fetchWrapper (file:///home/jailuser/git/node_modules/.pnpm/@octokit+request@10.0.11/node_modules/@octokit/request/dist-bundle/index.js:124:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async hook (file:///home/jailuser/git/node_modules/.pnpm/@octokit+auth-app@8.2.0/node_modules/@octokit/auth-app/dist-node/index.js:369:18)
+    at async getInstallationAuthenticationImpl (file:///home/jailuser/git/node_modules/.pnpm/@octokit+auth-app@8.2.0/node_modules/@octokit/auth-app/dist-node/index.js:248:7)
+    at async hook (file:///home/jailuser/git/node_modules/.pnpm/@octokit+auth-app@8.2.0/node_modules/@octokit/auth-app/dist-node/index.js:398:32)
+    at async Object.next (file:///home/jailuser/git/node_modules/.pnpm/@octokit+plugin-paginate-rest@14.0.0_@octokit+core@7.0.6/node_modules/@octokit/plugin-paginate-rest/dist-bundle/index.js:48:28)
+    at async listConversationComments (file:///home/jailuser/git/index.js:140:10)
+    at async boxyCommentorIssue (file:///home/jailuser/git/index.js:403:24), error2: HttpError: A JSON web token could not be decoded - https://docs.github.com/rest
+    at fetchWrapper (file:///home/jailuser/git/node_modules/.pnpm/@octokit+request@10.0.11/node_modules/@octokit/request/dist-bundle/index.js:124:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async hook (file:///home/jailuser/git/node_modules/.pnpm/@octokit+auth-app@8.2.0/node_modules/@octokit/auth-app/dist-node/index.js:369:18)
+    at async getInstallationAuthenticationImpl (file:///home/jailuser/git/node_modules/.pnpm/@octokit+auth-app@8.2.0/node_modules/@octokit/auth-app/dist-node/index.js:248:7)
+    at async hook (file:///home/jailuser/git/node_modules/.pnpm/@octokit+auth-app@8.2.0/node_modules/@octokit/auth-app/dist-node/index.js:398:32)
+    at async createCommentForContext (file:///home/jailuser/git/index.js:166:10)
+    at async boxyCommentorIssue (file:///home/jailuser/git/index.js:580:14), error3: HttpError: A JSON web token could not be decoded - https://docs.github.com/rest
+    at fetchWrapper (file:///home/jailuser/git/node_modules/.pnpm/@octokit+request@10.0.11/node_modules/@octokit/request/dist-bundle/index.js:124:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async hook (file:///home/jailuser/git/node_modules/.pnpm/@octokit+auth-app@8.2.0/node_modules/@octokit/auth-app/dist-node/index.js:369:18)
+    at async getInstallationAuthenticationImpl (file:///home/jailuser/git/node_modules/.pnpm/@octokit+auth-app@8.2.0/node_modules/@octokit/auth-app/dist-node/index.js:248:7)
+    at async hook (file:///home/jailuser/git/node_modules/.pnpm/@octokit+auth-app@8.2.0/node_modules/@octokit/auth-app/dist-node/index.js:398:32)
+    at async createCommentForContext (file:///home/jailuser/git/index.js:166:10)
+    at async boxyCommentorIssue (file:///home/jailuser/git/index.js:584:16), error4: HttpError: A JSON web token could not be decoded - https://docs.github.com/rest
+    at fetchWrapper (file:///home/jailuser/git/node_modules/.pnpm/@octokit+request@10.0.11/node_modules/@octokit/request/dist-bundle/index.js:124:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async hook (file:///home/jailuser/git/node_modules/.pnpm/@octokit+auth-app@8.2.0/node_modules/@octokit/auth-app/dist-node/index.js:369:18)
+    at async getInstallationAuthenticationImpl (file:///home/jailuser/git/node_modules/.pnpm/@octokit+auth-app@8.2.0/node_modules/@octokit/auth-app/dist-node/index.js:248:7)
+    at async hook (file:///home/jailuser/git/node_modules/.pnpm/@octokit+auth-app@8.2.0/node_modules/@octokit/auth-app/dist-node/index.js:398:32)
+    at async createCommentForContext (file:///home/jailuser/git/index.js:166:10)
+    at async boxyCommentorIssue (file:///home/jailuser/git/index.js:591:18)
+
+}
