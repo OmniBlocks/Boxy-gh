@@ -1,7 +1,7 @@
 import { Type } from "@google/genai";
 import { labelIssue, issueCloseOrOpen } from "./index.js";
 import { loadNotebook, saveMemoryToFile, saveStickyNoteToFile, createTodoListItem, loadTodoList, saveTodoList, loadReviews, saveReviews } from "./fs.js";
-import { runCommandInBoxyContainer } from "./container.js";
+import { runCommandInBoxyContainer, sendStdinToBoxyContainer, waitCommandInBoxyContainer, killCommandInBoxyContainer } from "./container.js";
  
 
 const readMemoryDeclaration = {
@@ -40,6 +40,34 @@ const executeCommandDeclaration = {
     },
     required: ["command"],
   },
+};
+const sendStdinDeclaration = {
+  name: "send_stdin",
+  description: "Send interactive text input to a currently running command (e.g. responding 'y' or typing a prompt selection).",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      text: { type: Type.STRING, description: "The text input to send to the command stdin (e.g., 'y\\n' or 'my-app')." }
+    },
+    required: ["text"],
+  },
+};
+
+const waitCommandDeclaration = {
+  name: "wait_command",
+  description: "Give a currently running command another slice of time (10-20 seconds) to continue executing.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      seconds: { type: Type.INTEGER, description: "Number of seconds to wait (default 10)." }
+    }
+  },
+};
+
+const killCommandDeclaration = {
+  name: "kill_command",
+  description: "Send SIGINT (Ctrl+C) to cancel a command that is hung or stuck in an infinite loop.",
+  parameters: { type: Type.OBJECT, properties: {} }
 };
 const saveStickyNoteDeclaration = {
   name: "save_sticky_note",
@@ -250,7 +278,10 @@ export const boxyWebhookTools = [
   labelIssueDeclaration,
   saveTodoListItemDeclaration,
   reactCommentDeclaration,
-  executeCommandDeclaration
+  executeCommandDeclaration,
+  sendStdinDeclaration,   
+  waitCommandDeclaration,
+  killCommandDeclaration
 ];
 export const boxyBackgroundTools = [
   readMemoryDeclaration,
@@ -264,7 +295,10 @@ export const boxyBackgroundTools = [
   saveTodoListItemDeclaration,
   completeTodoListItemDeclaration,
   createCommentDeclaration,
-  executeCommandDeclaration
+  executeCommandDeclaration,
+  sendStdinDeclaration,
+  waitCommandDeclaration,
+  killCommandDeclaration
 ];
 export async function executeTool(call, context, app) {
   let toolResult = {};
@@ -488,6 +522,19 @@ export async function executeTool(call, context, app) {
     app.log.info(`Boxy ran command: ${call.args.command}`);
     toolResult = await runCommandInBoxyContainer(call.args.command, isBoxyWebhook, token);
     app.log.info(`Boxy command result: ${JSON.stringify(toolResult)}`);
+    }
+    else if (call.name === "send_stdin") {
+      app.log.info(`Boxy sending stdin: ${call.args.text}`);
+      toolResult = await sendStdinToBoxyContainer(call.args.text);
+    }
+    else if (call.name === "wait_command") {
+      const ms = (call.args.seconds || 10) * 1000;
+      app.log.info(`Boxy asked to wait for ${ms} ms`);
+      toolResult = await waitCommandInBoxyContainer(ms);
+    }
+    else if (call.name === "kill_command") {
+      app.log.info(`Boxy asked to kill the running shell.`);
+      toolResult = await killCommandInBoxyContainer();
     }
   
     else if (call.name === "update_pr_summary") {
