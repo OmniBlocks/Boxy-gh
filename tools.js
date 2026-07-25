@@ -66,7 +66,7 @@ const waitCommandDeclaration = {
 
 const killCommandDeclaration = {
   name: "kill_command",
-  description: "Send SIGINT (Ctrl+C) to cancel a command that is hung or stuck in an infinite loop.",
+  description: "Forcefully terminate (SIGKILL) a running command and any of its child processes if it is hung or stuck in an infinite loop.",
   parameters: { type: Type.OBJECT, properties: {} }
 };
 const saveStickyNoteDeclaration = {

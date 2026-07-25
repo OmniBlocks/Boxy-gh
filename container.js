@@ -161,26 +161,32 @@ export async function waitCommandInBoxyContainer(timeSliceMs = 10000) {
 }
 
 
+/**
+ * Kill the currently running command and its child process tree inside the container
+ */
 export async function killCommandInBoxyContainer() {
   if (!activeTask) {
     return { error: "No command is currently running to kill." };
   }
 
   try {
-    await execAsync(`docker exec ${CONTAINER_NAME} sh -c "kill -9 \$(cat /tmp/.boxy_pid 2>/dev/null) 2>/dev/null"`);
+    // Safely terminate both child processes and the parent PID inside the container
+    const killCmd = `docker exec ${CONTAINER_NAME} sh -c 'PID=$(cat /tmp/.boxy_pid 2>/dev/null); if [ -n "$PID" ]; then pkill -9 -P "$PID" 2>/dev/null; kill -9 "$PID" 2>/dev/null; fi'`;
+    await execAsync(killCmd);
   } catch (err) {
-    try {
-      await execAsync(`docker exec ${CONTAINER_NAME} pkill -9 -f "${activeTask.command.substring(0, 15)}"`);
-    } catch (e) {}
+    // Ignore error if process already exited
   }
 
-  const partialStdout = activeTask.stdout.split(activeTask.delimiter)[0].trim();
-  const partialStderr = activeTask.stderr.trim();
+  // Brief pause to allow container stream cleanup
+  await new Promise(r => setTimeout(r, 500));
+
+  const partialStdout = activeTask ? activeTask.stdout.split(activeTask.delimiter)[0].trim() : "";
+  const partialStderr = activeTask ? activeTask.stderr.trim() : "";
   activeTask = null;
 
   return {
     status: "killed",
-    message: "Command was forcefully terminated.",
+    message: "Command and all associated child processes were forcefully terminated (SIGKILL).",
     last_stdout: partialStdout,
     last_stderr: partialStderr
   };
