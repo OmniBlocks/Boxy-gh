@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { EventEmitter } from "events";
 import fs from "fs/promises";
 import { loadNotebook, loadTodoList, loadReviews, loadStickyNotes, REVERT_FILE } from "./fs.js";
-import {ai, callAIWithFallback } from "./ai.js";
+import { callAIWithFallback } from "./ai.js";
 import { executeTool, boxyWebhookTools, boxyBackgroundTools } from "./tools.js";
 import { triggerCodeReview, handleWorkflowCompleted, handleReviewCommentReply } from './review.js';
 const workflowEvents = new EventEmitter();
@@ -239,7 +239,7 @@ async function startBackgroundQueue(app) {
           let conversationTurns = [{ role: "user", parts: [{ text: systemPrompt }] }];
           
           let response = await callAIWithFallback({
-            ai, contents: conversationTurns, tools: boxyBackgroundTools, appLog: app.log
+            contents: conversationTurns, tools: boxyBackgroundTools, appLog: app.log
           });
 
           let loopCount = 0;
@@ -260,7 +260,7 @@ async function startBackgroundQueue(app) {
                 
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 response = await callAIWithFallback({
-                  ai, contents: conversationTurns, tools: boxyBackgroundTools, appLog: app.log
+                  contents: conversationTurns, tools: boxyBackgroundTools, appLog: app.log
                 });
                 
                 loopCount++;
@@ -286,7 +286,7 @@ async function startBackgroundQueue(app) {
             });
 
             response = await callAIWithFallback({
-              ai, contents: conversationTurns, tools: boxyBackgroundTools, appLog: app.log
+              contents: conversationTurns, tools: boxyBackgroundTools, appLog: app.log
             });
           }
         }
@@ -510,7 +510,6 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
       let conversationTurns = [{ role: "user", parts: [{ text: systemPrompt }] }];
 
       let response = await callAIWithFallback({
-        ai,
         contents: conversationTurns,
         tools: boxyWebhookTools,
         appLog: app.log
@@ -548,7 +547,6 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
 
         app.log.info("Sending tool results back to Gemini...");
         response = await callAIWithFallback({
-          ai,
           contents: conversationTurns,
           tools: boxyWebhookTools,
           appLog: app.log

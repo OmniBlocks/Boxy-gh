@@ -1,5 +1,5 @@
 import AdmZip from 'adm-zip';
-import { ai, callAIWithFallback } from './ai.js';
+import { callAIWithFallback } from './ai.js';
 import { loadReviews, saveReviews, loadNotebook, loadTodoList, loadStickyNotes } from './fs.js';
 import { boxyReviewTools, executeTool, boxyWebhookTools } from './tools.js';
 
@@ -201,7 +201,7 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
   `;
 
   let conversationTurns = [{ role: "user", parts: [{ text: systemPrompt }] }];
-  let response = await callAIWithFallback({ ai, contents: conversationTurns, tools: boxyReviewTools, appLog: app.log });
+  let response = await callAIWithFallback({ contents: conversationTurns, tools: boxyReviewTools, appLog: app.log });
 
   let loopCount = 0;
   while (loopCount < 65) {
@@ -210,7 +210,7 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
       if (currState[prNum]) {
         conversationTurns.push(response.candidates[0].content);
         conversationTurns.push({ role: "user", parts: [{ text: "You output text instead of tools. You MUST finish the review using 'finish_pr_review' to exit and save your review." }] });
-        response = await callAIWithFallback({ ai, contents: conversationTurns, tools: boxyReviewTools, appLog: app.log });
+        response = await callAIWithFallback({ contents: conversationTurns, tools: boxyReviewTools, appLog: app.log });
         loopCount++; continue;
       } else break;
     }
@@ -218,7 +218,7 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
     const toolResult = await executeTool(call, context, app);
     conversationTurns.push(response.candidates[0].content);
     conversationTurns.push({ role: "user", parts: [{ functionResponse: { name: call.name, response: toolResult, id: call.id } }] });
-    response = await callAIWithFallback({ ai, contents: conversationTurns, tools: boxyReviewTools, appLog: app.log });
+    response = await callAIWithFallback({ contents: conversationTurns, tools: boxyReviewTools, appLog: app.log });
     loopCount++;
   }
 
@@ -388,7 +388,6 @@ export async function handleReviewCommentReply(context, app) {
     let conversationTurns = [{ role: "user", parts: [{ text: systemPrompt }] }];
 
     let response = await callAIWithFallback({
-      ai,
       contents: conversationTurns,
       tools: boxyWebhookTools,
       appLog: app.log
@@ -412,7 +411,6 @@ export async function handleReviewCommentReply(context, app) {
 
       app.log.info("Sending tool results back to Gemini...");
       response = await callAIWithFallback({
-        ai,
         contents: conversationTurns,
         tools: boxyWebhookTools,
         appLog: app.log

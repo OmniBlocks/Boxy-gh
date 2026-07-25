@@ -4,12 +4,6 @@ import { OpenRouter } from "@openrouter/sdk";
 import Groq from "groq-sdk"; 
 import { convertContentsToMessages } from './review.js';
 
-export const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-export const aiBackup = new GoogleGenAI({ apiKey: process.env.GEMINI_BACKUP_KEY });
-export const aiCerebras = new Cerebras({ apiKey: process.env.CEREBRAS_API_KEY });
-export const aiBackupBackup = new OpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
-export const aiGroq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-
 export function throwIfEmptyModelResponse(text, providerName) {
   if (!text || !text.trim()) {
     throw new Error(`${providerName} returned an empty response`);
@@ -83,7 +77,7 @@ export function formatGoogleCommentText(parts, elapsedSeconds) {
 
   return answerText ? `${details}\n\n${answerText}` : details;
 }
-export async function callAIWithFallback({ ai, contents, tools, appLog }) {
+export async function callAIWithFallback({ contents, tools, appLog }) {
   const providers = [
     { name: "gemini-3.1-flash-lite", type: "google", model: "gemini-3.1-flash-lite", useBackup: false },
     { name: "gemini-3.5-flash", type: "google", model: "gemini-3.5-flash", useBackup: false },
@@ -124,9 +118,12 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
     try {
       appLog && appLog.info(`Currently trying: ${provider.name} with model: ${provider.model}`);
       if (provider.type === "google") {
-        if (provider.useBackup && !process.env.GEMINI_BACKUP_KEY) {
+        if (provider.useBackup ? !process.env.GEMINI_BACKUP_KEY : !process.env.GEMINI_API_KEY) {
           continue;
         }
+
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const aiBackup = new GoogleGenAI({ apiKey: process.env.GEMINI_BACKUP_KEY });
 
         const client = provider.useBackup && aiBackup ? aiBackup : ai;
 
@@ -223,6 +220,8 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
           continue;
         }
 
+        const aiCerebras = new Cerebras({ apiKey: process.env.CEREBRAS_API_KEY });
+
         const messages = convertContentsToMessages(contents);
 
         const response = await aiCerebras.chat.completions.create({
@@ -261,6 +260,7 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
           continue;
         }
 
+        const aiGroq = new Groq({ apiKey: process.env.GROQ_API_KEY });
         const messages = convertContentsToMessages(contents);
 
         let toolsParam = undefined;
@@ -598,6 +598,11 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
 
       
       if (provider.type === "openrouter") {
+        if (!process.env.OPENROUTER_API_KEY) {
+          continue;
+        }
+
+        const aiBackupBackup = new OpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
         const messages = convertContentsToMessages(contents);
 
         let toolsParam = undefined;
@@ -930,6 +935,10 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
       }
 
       if (provider.type === "pollinations") {
+        if (!process.env.POLLINATIONS_API_KEY) {
+          continue;
+        }
+        
         const messages = convertContentsToMessages(contents);
         const body = {
           model: provider.model,
@@ -1053,7 +1062,7 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
     }
   }
 
-  throw new Error(`All AI providers failed. Last error: ${lastError ? lastError.message : "unknown"}`);
+  throw new Error(`All AI providers failed. Last error: ${lastError ? lastError.message : "Unknown! You probably didn't provide any API keys."}`);
 }
 export function getElapsedSeconds(startTime) {
   return ((Date.now() - startTime) / 1000).toFixed(1);
