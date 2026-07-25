@@ -740,7 +740,7 @@ export async function callAIWithFallback({ contents, tools, appLog }) {
               }
             };
           });
-          body.tool_choice = "auto";
+          body.tool_choice = "any";
         }
 
         const headers = {
