@@ -140,10 +140,25 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
   const prIssueReskinComments = await context.octokit.paginate(context.octokit.rest.issues.listComments, { owner: context.repo().owner, repo: context.repo().repo, issue_number: prNum, per_page: 50 });
   // ^^ the above is only half joke btw. pr comments are just reskinned issue comments. only review comemnts are unique to prs
   const reviewComments = await context.octokit.paginate(context.octokit.rest.pulls.listReviewComments, { owner: context.repo().owner, repo: context.repo().repo, pull_number: prNum, per_page: 500 });
+  // Formal reviews (best-effort: don't let this block the review if it fails)
+  let formalReviews = [];
+  try {
+    formalReviews = await context.octokit.paginate(context.octokit.rest.pulls.listReviews, { owner: context.repo().owner, repo: context.repo().repo, pull_number: prNum, per_page: 100 });
+  } catch (error) {
+    app.log.warn(`Failed to fetch formal reviews for PR #${prNum}: ${error.message}`);
+  }
   const prDescription = await context.octokit.rest.pulls.get({ owner: context.repo().owner, repo: context.repo().repo, pull_number: prNum });
   let allComments = [...prIssueReskinComments, ...reviewComments];
   allComments.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
   let prDescriptionText = `Title: ${prDescription.data.title}\nState: ${prDescription.data.state}\nAuthor: ${prDescription.data.user?.login}\nBody:\n${prDescription.data.body || "No description."}\n\n=== COMMENTS ===\n`;
+  prDescriptionText += allComments.length > 0
+    ? allComments.map(c => `[${c.path ? `File: ${c.path} | Line: ${c.line} | ` : ""}User: ${c.user?.login}]: ${c.body}`).join("\n---\n")
+    : "No comments yet.";
+  prDescriptionText += "\n\n=== PREVIOUS FORMAL REVIEWS (submitted verdicts, e.g. via finish_pr_review) ===\n";
+  const submittedReviews = formalReviews.filter(r => r.state !== "PENDING");
+  prDescriptionText += submittedReviews.length > 0
+    ? submittedReviews.map(r => `[User: ${r.user?.login} | Verdict: ${r.state}]: ${r.body || "(no summary text)"}`).join("\n---\n")
+    : "No formal reviews submitted yet.";
   const prAuthor = prDescription.data.user?.login || "unknown";
   const prBranch = prDescription.data.head.ref || "unknown";
   const prRepo = prDescription.data.head.repo?.full_name || "unknown";
@@ -256,6 +271,17 @@ export async function handleReviewCommentReply(context, app) {
       { owner, repo, issue_number: prNum, per_page: 500 }
     );
 
+    // Fetch formal PR reviews (best-effort: don't let this block context assembly if it fails)
+    let formalReviews = [];
+    try {
+      formalReviews = await context.octokit.paginate(
+        context.octokit.rest.pulls.listReviews,
+        { owner, repo, pull_number: prNum, per_page: 100 }
+      );
+    } catch (error) {
+      app.log.warn(`Failed to fetch formal reviews for PR #${prNum}: ${error.message}`);
+    }
+
     // Reconstruct the specific review comment thread Boxy is replying to
     const parentId = comment.in_reply_to_id || comment.id;
     const thread = reviewComments.filter(c => c.id === parentId || c.in_reply_to_id === parentId);
@@ -281,6 +307,18 @@ export async function handleReviewCommentReply(context, app) {
     for (const c of normalIssueComments) {
       conversationHistory += `[User: ${c.user.login}]: ${c.body}\n---\n`;
     }
+    conversationHistory += "\n";
+
+    conversationHistory += `=== FORMAL PR REVIEWS (submitted verdicts, e.g. via finish_pr_review) ===\n`;
+    const submittedReviews = formalReviews.filter(r => r.state !== "PENDING");
+    if (submittedReviews.length > 0) {
+      for (const r of submittedReviews) {
+        conversationHistory += `[User: ${r.user?.login} | Verdict: ${r.state}]: ${r.body || "(no summary text)"}\n---\n`;
+      }
+    } else {
+      conversationHistory += "No formal reviews submitted yet.\n";
+    }
+    conversationHistory += "\n";
 
     conversationHistory += `=== CURRENT INLINE REVIEW THREAD (THE MAIN THREAD YOU ARE REPLYING TO) ===\n`;
     conversationHistory += thread.map(c => `[${c.user.login}]: ${c.body}`).join("\n---\n") + "\n\n";
