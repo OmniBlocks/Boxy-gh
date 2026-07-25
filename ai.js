@@ -128,8 +128,8 @@ export async function callAIWithFallback({ contents, tools, appLog }) {
         const client = provider.useBackup && aiBackup ? aiBackup : ai;
 
         const toolList = tools && tools.length > 0
-          ? [{ functionDeclarations: tools }, { codeExecution: {} }, { googleSearch: {} }]
-          : [{ codeExecution: {} }, { googleSearch: {} }];
+  ? [{ functionDeclarations: tools }, { googleSearch: {} }]
+  : [{ googleSearch: {} }];
 
         const config = {
           tools: toolList,
