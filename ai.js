@@ -79,6 +79,7 @@ export function formatGoogleCommentText(parts, elapsedSeconds) {
 }
 export async function callAIWithFallback({ contents, tools, appLog }) {
   const providers = [
+    { name: "gemini-3.5-flash-lite", type: "google", model: "gemini-3.5-flash-lite", useBackup: false },
     { name: "gemini-3.1-flash-lite", type: "google", model: "gemini-3.1-flash-lite", useBackup: false },
     { name: "gemini-3.5-flash", type: "google", model: "gemini-3.5-flash", useBackup: false },
     { name: "gemma-4-26b-a4b-it", type: "google", model: "gemma-4-26b-a4b-it", useBackup: false },
