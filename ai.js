@@ -93,7 +93,7 @@ export async function callAIWithFallback({ ai, contents, tools, appLog }) {
     { name: "gemini-3.5-flash-backup", type: "google", model: "gemini-3.5-flash", useBackup: true },
     { name: "gemma-4-26b-a4b-it-backup", type: "google", model: "gemma-4-26b-a4b-it", useBackup: true },
     { name: "gemma-4-31b-it-backup", type: "google", model: "gemma-4-31b-it", useBackup: true },
-    { name: "mistral-codestral", type: "mistral", model: "codestral-latest", useBackup: false },
+    { name: "mistral-large", type: "mistral", model: "mistral-large-latest", useBackup: false },
     { name: "pollinations-ultra-fast-gemma", type: "pollinations", model: "tomdacatto/gemma-4-31b-fast" },
     { name: "pollinations-agnes-1.5-flash", type: "pollinations", model: "Catniti/agnes-1.5-flash" },
     { name: "pollinations-minimax-m3-31b", type: "pollinations", model: "sharktide/inferenceport-ai-minimax-m3" },
