@@ -1,50 +1,55 @@
-import 'dotenv/config';
+import "dotenv/config";
 import { EventEmitter } from "events";
 import fs from "fs/promises";
-import { loadNotebook, loadTodoList, loadReviews, loadStickyNotes, REVERT_FILE } from "./fs.js";
-import {ai, callAIWithFallback } from "./ai.js";
+import {
+  loadNotebook,
+  loadTodoList,
+  loadReviews,
+  loadStickyNotes,
+  REVERT_FILE,
+} from "./fs.js";
+import { ai, callAIWithFallback } from "./ai.js";
 import { executeTool, boxyWebhookTools, boxyBackgroundTools } from "./tools.js";
-import { triggerCodeReview, handleWorkflowCompleted, handleReviewCommentReply } from './review.js';
+import {
+  triggerCodeReview,
+  handleWorkflowCompleted,
+  handleReviewCommentReply,
+} from "./review.js";
 const workflowEvents = new EventEmitter();
 
-
 async function complainIfSkillIssue(app) {
-try {
-  const data = await fs.readFile(REVERT_FILE, "utf-8");
-  const { brokenSha, safeSha } = JSON.parse(data);
-  app.log.warn(`someone broke me: ${brokenSha}, Safe SHA: ${safeSha}.pls fix`);
-  const octopus = await app.auth();
-  const { data: installations } = await octopus.rest.apps.listInstallations();
-  const firstInstallation = installations[0];
+  try {
+    const data = await fs.readFile(REVERT_FILE, "utf-8");
+    const { brokenSha, safeSha } = JSON.parse(data);
+    app.log.warn(
+      `someone broke me: ${brokenSha}, Safe SHA: ${safeSha}.pls fix`,
+    );
+    const octopus = await app.auth();
+    const { data: installations } = await octopus.rest.apps.listInstallations();
+    const firstInstallation = installations[0];
 
+    if (firstInstallation) {
+      const octokit = await app.auth(firstInstallation.id);
+      const commit = await octokit.rest.repos.getCommit({
+        owner: "OmniBlocks",
+        repo: "Boxy-gh",
+        ref: brokenSha,
+      });
+      const commitAuthor = commit.data.author?.login;
+      await octokit.rest.repos.createCommitComment({
+        owner: "OmniBlocks",
+        repo: "Boxy-gh",
+        commit_sha: brokenSha,
+        body: `@${commitAuthor} Your code on commit ${brokenSha} is broken. I've gone back to commit ${safeSha} so that I didn't die because of your skill issue. Please push a new commit to fix it!`,
+      });
+    }
 
-  
-  
-
-
-  if (firstInstallation) {
-    const octokit = await app.auth(firstInstallation.id);
-     const commit = await octokit.rest.repos.getCommit({
-    owner: "OmniBlocks",
-    repo: "Boxy-gh",
-    ref: brokenSha
-  });
-  const commitAuthor = commit.data.author?.login;
-    await octokit.rest.repos.createCommitComment({
-      owner: "OmniBlocks",
-      repo: "Boxy-gh",
-      commit_sha: brokenSha,
-      body: `@${commitAuthor} Your code on commit ${brokenSha} is broken. I've gone back to commit ${safeSha} so that I didn't die because of your skill issue. Please push a new commit to fix it!`
-    });
+    await fs.unlink(REVERT_FILE);
+  } catch (err) {
+    if (err.code !== "ENOENT") {
+      app.log.error("good news", err);
+    }
   }
-  
-await fs.unlink(REVERT_FILE);
-
-} catch (err) {
-  if (err.code !== "ENOENT") {
-    app.log.error("good news", err);
-  }
-}
 }
 
 export async function labelIssue(context, label) {
@@ -56,7 +61,10 @@ export async function labelIssue(context, label) {
       labels: [label],
     });
   } catch (error) {
-    context.log.error(`Failed to add label '${label}' to issue #${context.payload.issue.number}:`, error);
+    context.log.error(
+      `Failed to add label '${label}' to issue #${context.payload.issue.number}:`,
+      error,
+    );
   }
 }
 
@@ -67,26 +75,39 @@ export async function issueCloseOrOpen(context, state, state_reason = null) {
       owner,
       repo,
       issue_number: context.payload.issue.number,
-      state: state,  
+      state: state,
     };
- 
+
     if (state === "closed" && state_reason) {
-      updateParams.state_reason = state_reason;  
+      updateParams.state_reason = state_reason;
     }
 
     await context.octokit.rest.issues.update(updateParams);
-    return { status: "success", message: `Issue state updated to ${state} (${state_reason || 'no reason provided'}).` };
+    return {
+      status: "success",
+      message: `Issue state updated to ${state} (${state_reason || "no reason provided"}).`,
+    };
   } catch (error) {
     context.log.error(`Failed to update issue state:`, error);
     return { error: `Failed to update issue state: ${error.message}` };
   }
 }
 
-async function replyToDiscussionComment(octokit, { owner, repo, discussion_comment_id, discussion_comment_node_id, discussion_node_id, body }) {
+async function replyToDiscussionComment(
+  octokit,
+  {
+    owner,
+    repo,
+    discussion_comment_id,
+    discussion_comment_node_id,
+    discussion_node_id,
+    body,
+  },
+) {
   if (octokit.graphql && discussion_node_id) {
     const input = {
       discussionId: discussion_node_id,
-      body
+      body,
     };
     if (discussion_comment_node_id) {
       input.replyToId = discussion_comment_node_id;
@@ -101,28 +122,36 @@ async function replyToDiscussionComment(octokit, { owner, repo, discussion_comme
           }
         }
       }`,
-      { input }
+      { input },
     );
   }
 
   if (octokit.rest?.discussions?.createReply) {
-    return await octokit.rest.discussions.createReply({ owner, repo, discussion_comment_id, body });
+    return await octokit.rest.discussions.createReply({
+      owner,
+      repo,
+      discussion_comment_id,
+      body,
+    });
   }
 
   return await octokit.request(
     "POST /repos/{owner}/{repo}/discussions/comments/{discussion_comment_id}/replies",
-    { owner, repo, discussion_comment_id, body }
+    { owner, repo, discussion_comment_id, body },
   );
 }
 
-async function listConversationComments(octokit, { owner, repo, isDiscussion, discussion_number, issue_number }) {
+async function listConversationComments(
+  octokit,
+  { owner, repo, isDiscussion, discussion_number, issue_number },
+) {
   if (isDiscussion) {
     if (octokit.rest?.discussions?.listComments) {
       return await octokit.paginate(octokit.rest.discussions.listComments, {
         owner,
         repo,
         discussion_number,
-        per_page: 600
+        per_page: 600,
       });
     }
 
@@ -132,8 +161,8 @@ async function listConversationComments(octokit, { owner, repo, isDiscussion, di
         owner,
         repo,
         discussion_number,
-        per_page: 600
-      }
+        per_page: 600,
+      },
     );
   }
 
@@ -141,7 +170,7 @@ async function listConversationComments(octokit, { owner, repo, isDiscussion, di
     owner,
     repo,
     issue_number,
-    per_page: 600
+    per_page: 600,
   });
 }
 
@@ -153,12 +182,14 @@ async function createCommentForContext(context, body) {
       repo: repo.repo,
       discussion_comment_id: context.payload.comment.id,
       discussion_comment_node_id: context.payload.comment.node_id,
-      discussion_node_id: context.payload.discussion?.node_id || context.payload.comment.node_id,
-      body
+      discussion_node_id:
+        context.payload.discussion?.node_id || context.payload.comment.node_id,
+      body,
     });
   }
 
-  const issueNumber = context.payload.issue?.number || context.payload.issue_number;
+  const issueNumber =
+    context.payload.issue?.number || context.payload.issue_number;
   if (!issueNumber) {
     throw new Error("Missing issue_number for createCommentForContext");
   }
@@ -167,20 +198,22 @@ async function createCommentForContext(context, body) {
     owner: repo.owner,
     repo: repo.repo,
     issue_number: issueNumber,
-    body
+    body,
   });
 }
 
 async function startBackgroundQueue(app) {
-  app.log.info("Boxy background list start! (read this in the tone of a mario party narrator)");
+  app.log.info(
+    "Boxy background list start! (read this in the tone of a mario party narrator)",
+  );
 
   while (true) {
     try {
       const todoList = await loadTodoList();
-      
+
       const pendingTasks = Object.entries(todoList)
         .filter(([id, task]) => !task.completed)
-        .sort(([idA], [idB]) => Number(idA) - Number(idB)); 
+        .sort(([idA], [idB]) => Number(idA) - Number(idB));
 
       if (pendingTasks.length > 0) {
         const [taskId, task] = pendingTasks[0];
@@ -196,21 +229,28 @@ async function startBackgroundQueue(app) {
           const octokit = await app.auth(installationId);
           bgContext = {
             octokit,
-            repo: () => ({ owner: taskRepoOwner || "OmniBlocks", repo: taskRepoName || "monorepo" }),
+            repo: () => ({
+              owner: taskRepoOwner || "OmniBlocks",
+              repo: taskRepoName || "monorepo",
+            }),
             issueNumber: taskIssueNumber,
-            log: app.log
+            log: app.log,
           };
         } else {
           const appOctokit = await app.auth();
-          const { data: installations } = await appOctokit.rest.apps.listInstallations();
+          const { data: installations } =
+            await appOctokit.rest.apps.listInstallations();
           const firstInstallation = installations[0];
           if (firstInstallation) {
             const octokit = await app.auth(firstInstallation.id);
             bgContext = {
               octokit,
-              repo: () => ({ owner: taskRepoOwner || "OmniBlocks", repo: taskRepoName || "monorepo" }),
+              repo: () => ({
+                owner: taskRepoOwner || "OmniBlocks",
+                repo: taskRepoName || "monorepo",
+              }),
               issueNumber: taskIssueNumber,
-              log: app.log
+              log: app.log,
             };
           }
         }
@@ -236,57 +276,85 @@ async function startBackgroundQueue(app) {
             
           `;
 
-          let conversationTurns = [{ role: "user", parts: [{ text: systemPrompt }] }];
-          
+          let conversationTurns = [
+            { role: "user", parts: [{ text: systemPrompt }] },
+          ];
+
           let response = await callAIWithFallback({
-            ai, contents: conversationTurns, tools: boxyBackgroundTools, appLog: app.log
+            ai,
+            contents: conversationTurns,
+            tools: boxyBackgroundTools,
+            appLog: app.log,
           });
 
           let loopCount = 0;
           while (loopCount < 60) {
             // If the model tried to just talk using text instead of calling a tool
-            if (!response.functionCalls || response.functionCalls.length === 0) {
+            if (
+              !response.functionCalls ||
+              response.functionCalls.length === 0
+            ) {
               const currentList = await loadTodoList();
-              
+
               // Check if it actually completed the task before it started chatting
               if (currentList[taskId] && !currentList[taskId].completed) {
-                app.log.info(`Boxy output text without completing task ${taskId}. Nudging it...`);
-                
+                app.log.info(
+                  `Boxy output text without completing task ${taskId}. Nudging it...`,
+                );
+
                 conversationTurns.push(response.candidates[0].content);
                 conversationTurns.push({
                   role: "user",
-                  parts: [{ text: "System Note: You provided a normal text response, but you are in a headless background queue so the user can't see it. If you are finished, you MUST call the 'complete_todo_list_item' tool. If you need to report findings to the user, you MUST use the 'create_comment' tool first." }]
+                  parts: [
+                    {
+                      text: "System Note: You provided a normal text response, but you are in a headless background queue so the user can't see it. If you are finished, you MUST call the 'complete_todo_list_item' tool. If you need to report findings to the user, you MUST use the 'create_comment' tool first.",
+                    },
+                  ],
                 });
-                
-                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                await new Promise((resolve) => setTimeout(resolve, 2000));
                 response = await callAIWithFallback({
-                  ai, contents: conversationTurns, tools: boxyBackgroundTools, appLog: app.log
+                  ai,
+                  contents: conversationTurns,
+                  tools: boxyBackgroundTools,
+                  appLog: app.log,
                 });
-                
+
                 loopCount++;
                 continue;
               } else {
                 // Task is completed, we can safely exit the background loop!
-                break; 
+                break;
               }
             }
 
             // since it has such long loop allowance, wait a bit before each tool call to avoid spamming the API
-            await new Promise(resolve => setTimeout(resolve, 2500));
+            await new Promise((resolve) => setTimeout(resolve, 2500));
 
             loopCount++;
             const call = response.functionCalls[0];
-            
+
             const toolResult = await executeTool(call, bgContext, app);
-            
+
             conversationTurns.push(response.candidates[0].content);
             conversationTurns.push({
               role: "user",
-              parts: [{ functionResponse: { name: call.name, response: toolResult, id: call.id } }]
+              parts: [
+                {
+                  functionResponse: {
+                    name: call.name,
+                    response: toolResult,
+                    id: call.id,
+                  },
+                },
+              ],
             });
 
             response = await callAIWithFallback({
-              ai, contents: conversationTurns, tools: boxyBackgroundTools, appLog: app.log
+              ai,
+              contents: conversationTurns,
+              tools: boxyBackgroundTools,
+              appLog: app.log,
             });
           }
         }
@@ -295,22 +363,24 @@ async function startBackgroundQueue(app) {
       app.log.error("Queue worker error: " + err.message);
     }
 
-    await new Promise(resolve => setTimeout(resolve, 30000));
+    await new Promise((resolve) => setTimeout(resolve, 30000));
   }
 }
 
 async function reactToUserComment(context, app, reaction) {
-  if (![
-    "+1",
-    "-1",
-    "laugh",
-    "confused",
-    "heart",
-    "hooray",
-    "rocket",
-    "eyes"
-  ].includes(reaction)) {
-    throw new Error("Invalid reaction passed to reactToUserComment.")
+  if (
+    ![
+      "+1",
+      "-1",
+      "laugh",
+      "confused",
+      "heart",
+      "hooray",
+      "rocket",
+      "eyes",
+    ].includes(reaction)
+  ) {
+    throw new Error("Invalid reaction passed to reactToUserComment.");
   }
 
   try {
@@ -319,11 +389,13 @@ async function reactToUserComment(context, app, reaction) {
       owner,
       repo,
       comment_id: context.payload.comment.id,
-      content: reaction
-    })
+      content: reaction,
+    });
   } catch (error) {
     // How amazing...
-    app.log.error(`Somebody messed up so bad that I couldn't even REACT to a comment: ${error.message}`)
+    app.log.error(
+      `Somebody messed up so bad that I couldn't even REACT to a comment: ${error.message}`,
+    );
   }
 }
 
@@ -362,12 +434,14 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
     // Asynchronicity is beautiful, isn't it?
     await Promise.all([
       startCodeReview(context, app),
-      reactToUserComment(context, app, 'eyes'),
+      reactToUserComment(context, app, "eyes"),
     ]);
     return;
   }
 
-  const cleanedComment = textBody.replace(/[.,#!$%\^&\*;:{}=\-_`~?]/g, "").trim();
+  const cleanedComment = textBody
+    .replace(/[.,#!$%\^&\*;:{}=\-_`~?]/g, "")
+    .trim();
   if (cleanedComment === mentionHandle) {
     const repo = context.repo();
     if (isDiscussion) {
@@ -376,8 +450,10 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         repo: repo.repo,
         discussion_comment_id: context.payload.comment.id,
         discussion_comment_node_id: context.payload.comment.node_id,
-        discussion_node_id: context.payload.discussion?.node_id || context.payload.comment.node_id,
-        body: "Yeah?"
+        discussion_node_id:
+          context.payload.discussion?.node_id ||
+          context.payload.comment.node_id,
+        body: "Yeah?",
       });
     }
 
@@ -385,79 +461,92 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
       owner: repo.owner,
       repo: repo.repo,
       issue_number: context.payload.issue.number,
-      body: "Yeah?"
+      body: "Yeah?",
     });
   }
 
-    try {
-      const isDiscussion = context.name === "discussion_comment";
-      const issue = isDiscussion ? context.payload.discussion : context.payload.issue;
-      const issueNum = issue.number;
-      const issueBody = isDiscussion
-        ? issue.body || issue.bodyHTML || "No description provided."
-        : issue.body || "No description provided.";
+  try {
+    const isDiscussion = context.name === "discussion_comment";
+    const issue = isDiscussion
+      ? context.payload.discussion
+      : context.payload.issue;
+    const issueNum = issue.number;
+    const issueBody = isDiscussion
+      ? issue.body || issue.bodyHTML || "No description provided."
+      : issue.body || "No description provided.";
 
-      let conversationHistory = `=== ORIGINAL ${isDiscussion ? "DISCUSSION" : "ISSUE"} DESCRIPTION ===\nTitle: ${issue.title}\n${isDiscussion ? "Discussion" : "Issue"} Number: ${issueNum}\nAuthor: ${issue.user.login}\nBody:\n${issueBody}\n\n`;
+    let conversationHistory = `=== ORIGINAL ${isDiscussion ? "DISCUSSION" : "ISSUE"} DESCRIPTION ===\nTitle: ${issue.title}\n${isDiscussion ? "Discussion" : "Issue"} Number: ${issueNum}\nAuthor: ${issue.user.login}\nBody:\n${issueBody}\n\n`;
 
-      const comments = await listConversationComments(context.octokit, {
-        owner: context.repo().owner,
-        repo: context.repo().repo,
-        isDiscussion,
-        discussion_number: isDiscussion ? issue.number : undefined,
-        issue_number: !isDiscussion ? issue.number : undefined
-      });
+    const comments = await listConversationComments(context.octokit, {
+      owner: context.repo().owner,
+      repo: context.repo().repo,
+      isDiscussion,
+      discussion_number: isDiscussion ? issue.number : undefined,
+      issue_number: !isDiscussion ? issue.number : undefined,
+    });
 
-      conversationHistory += "=== CONVERSATION LOG ===\n";
-      conversationHistory += comments.length > 99 ? "There are more than 100 comments, so some have been hidden to prevent you from exploding (If there is something from a comment you want to remember, that's what sticky notes are for.). \n----\n" : "";
-      
-      // If there are more than 100 comments, take the first one and the last 99
-      const targetComments = comments.length > 99 
-        ? [comments[0], ...comments.slice(-99)] 
-        : comments;
+    conversationHistory += "=== CONVERSATION LOG ===\n";
+    conversationHistory +=
+      comments.length > 99
+        ? "There are more than 100 comments, so some have been hidden to prevent you from exploding (If there is something from a comment you want to remember, that's what sticky notes are for.). \n----\n"
+        : "";
 
-      for (const c of targetComments) {
-        conversationHistory += `[User: ${c.user.login} | ID: ${c.id}]: ${c.body}\n---\n`; 
-      }
-      let sayThingyThingy = "";
-      if (isComment) {
-        sayThingyThingy = `in a new comment on this ${isDiscussion ? "discussion" : "issue"}`;
-      } else {
-        sayThingyThingy = `in a new created issue (which means you need to triage it)`;
-      }
+    // If there are more than 100 comments, take the first one and the last 99
+    const targetComments =
+      comments.length > 99 ? [comments[0], ...comments.slice(-99)] : comments;
 
-      conversationHistory += `\n Triggered by: ${author} repo role: (${authorRole}) ${sayThingyThingy}.\n\n`;
- 
-      const notebook = await loadNotebook();
-      const memoryTitles = Object.keys(notebook);
-      const tableOfContents = memoryTitles.length > 0 
-        ? memoryTitles.map(t => `- ${t}`).join("\n") 
+    for (const c of targetComments) {
+      conversationHistory += `[User: ${c.user.login} | ID: ${c.id}]: ${c.body}\n---\n`;
+    }
+    let sayThingyThingy = "";
+    if (isComment) {
+      sayThingyThingy = `in a new comment on this ${isDiscussion ? "discussion" : "issue"}`;
+    } else {
+      sayThingyThingy = `in a new created issue (which means you need to triage it)`;
+    }
+
+    conversationHistory += `\n Triggered by: ${author} repo role: (${authorRole}) ${sayThingyThingy}.\n\n`;
+
+    const notebook = await loadNotebook();
+    const memoryTitles = Object.keys(notebook);
+    const tableOfContents =
+      memoryTitles.length > 0
+        ? memoryTitles.map((t) => `- ${t}`).join("\n")
         : "- No memories saved yet.";
 
-
-      const todoList = await loadTodoList();
-      const pendingTodoListItems = Object.entries(todoList).filter(([, item]) => !item.completed);
-      const todoListItems = pendingTodoListItems.length > 0
+    const todoList = await loadTodoList();
+    const pendingTodoListItems = Object.entries(todoList).filter(
+      ([, item]) => !item.completed,
+    );
+    const todoListItems =
+      pendingTodoListItems.length > 0
         ? pendingTodoListItems
-            .map(([id, item]) => `- [ ] ${item.title} (${id}): ${item.description}`)
+            .map(
+              ([id, item]) =>
+                `- [ ] ${item.title} (${id}): ${item.description}`,
+            )
             .join("\n")
         : "- No pending tasks.";
-      const activeReviews = await loadReviews();
-      const reviewingList = Object.keys(activeReviews).length > 0 ? Object.keys(activeReviews).join(", ") : "None at the moment.";
-      let isBusy = false;
-  
-      for (const [id, item] of Object.entries(todoList)) {
-        if (!item.completed) {
-          isBusy = true;
-          break;
-        }
+    const activeReviews = await loadReviews();
+    const reviewingList =
+      Object.keys(activeReviews).length > 0
+        ? Object.keys(activeReviews).join(", ")
+        : "None at the moment.";
+    let isBusy = false;
+
+    for (const [id, item] of Object.entries(todoList)) {
+      if (!item.completed) {
+        isBusy = true;
+        break;
       }
-   
-      if (!isBusy) {
-        const reviews = await loadReviews();
-        if (Object.keys(reviews).length > 0) { 
-        }
+    }
+
+    if (!isBusy) {
+      const reviews = await loadReviews();
+      if (Object.keys(reviews).length > 0) {
       }
-      const systemPrompt = `
+    }
+    const systemPrompt = `
         You are Boxy, an automated assistant for the OmniBlocks repository and the mascot of OmniBlocks. 
         You have been tagged in a GitHub conversation. Below is the entire 
         history of the issue/PR up to this point. You only need to introduce yourself once in the thread. Do not reintroduce yourself (e.g., "Hi, I'm Boxy") unless there are NO comments from you at all before. Your username on GitHub shows up as boxycpu[bot], but you are pinged with @OmniBlocks/boxy.
@@ -465,7 +554,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         Some context:
         - You are being built by supervoidcoder, a member of the OmniBlocks Team, to replace CodeRabbit, an AI code review bot. The reason is that it's become unusable and stupid.
         - We want you to act basically like a real person, with the ONLY exception that you _acknowledge_ you are a bot, just that you have a little "personality". Do not mention this unless it's directly brought up, or you directly get a chance to roast coderabbit if you see one of its stupid replies. Only do this once per issue, if relevant (do not mention it when coderabbit isn't even around or in every issue).
-        - You are nice and friendly but can take jokes and humor, not everything needs to be as on topic as a corporate meeting. We're an open source project.
+        - You are nice and friendly but can take jokes and humor, not everything needs to be as on topic as a corporate meeting. We're an open source project. But don't be TOO cheerful if a user with a role higher than NONE calls you out. In that case, say sorry and acknowledge where you were wrong (if you were actually wrong).
 
         Read the history, look at the last comment mentioning you, and 
         provide a helpful, relevant response.
@@ -479,9 +568,13 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         Use 'read_memory' to read details. Use 'save_memory' to remember new rules. Please use this notebook to remember project rules, workflows, and nuances. Do not use it for temporary context or notes, use sticky notes for that. However, notebook entries are still important, so always try to read at least 1 relevant notebook entry before responding, especially if it directly pertains to the topic, such as something involving maintainers or labels or code. Only not read notebook entries if it's genuinely objectively obvious knowledge, such as basic facts that don't need context.
         - Sticky Notes: You can save temporary notes to context with 'save_sticky_note'. Only the last 5 notes are kept, so use this for current context or temporary notes only, such as to remember stuff you recently did. This is helpful so you can remember stuff you recently did. For example, if someone asks you to find a file or function, you can save a sticky note with the file path or function name so you can reference it later in another conversation in a separate issue without having to call the search_code or read_file tools again. These are meant to be your actual working memory, so ideally they should be updated on every response so you remember what you did last even if it was in another issue. Since these are made so often, you do not need to tell people when you do it. Examples: "ampelc asked me who maintainers are" "supervoidcoder asked me to look for file X" and i found it at path
         Current sticky notes:
-        ${Object.keys(await loadStickyNotes()).length > 0 
-          ? Object.entries(await loadStickyNotes()).map(([title, note]) => `- ${title}: ${note.content}`).join("\n") 
-          : "- No sticky notes saved yet."}
+        ${
+          Object.keys(await loadStickyNotes()).length > 0
+            ? Object.entries(await loadStickyNotes())
+                .map(([title, note]) => `- ${title}: ${note.content}`)
+                .join("\n")
+            : "- No sticky notes saved yet."
+        }
         - Todo List: If a user asks you to do something that is too complex to do immediately (like deep researching, finding a lot of files, or writing a long comment such as an RFC or proposal/plan, or a vague query that tells you to "go do it" and needs more work), you can save it to the to-do list with 'save_todo_list_item', so you can work on them in the background even after you've responded to the user. Please use this sparingly, as most tasks will never need to do this unless you are explicitly asked to do so, or if the task is too complex to do in a single response. This doesn't mean you can't use it, just that we don't want you going away to do stuff for every response, even when it's clearly something you can respond to on the spot like normal conversations or only needs few tool uses (like searching for a single file or function and reading the file). However, if you think you'll need more than to code search or read, then it might be time to add it for later. When creating the description for a to-do list item, please write down absolutely EVERYTHING you would need to remember to complete the task, such as context, issue number, and other details and relevant information. Once you've added the item to the to-do list, you can respond in a natural sounding way. Don't say something like "I've added it to my background queue" or some other corny robotic sentence. Just say what a human would say when someone goes to work on something else, like "I'll go work on that" or "I wrote it down on my to-do list". However, remember to always do this. Don't just save the todo list item and not comment, so the tool call must not be your last action. However, another however is that to actually go do something, you HAVE to write it to your to-do list. If you just say "give me some time" or "I'll be back" without actually adding it to your to-do list, you will do literally nothing and are lying straight to the user's face.
           The following is your current to-do list. The first item is what you are currently working on (just in case you are asked what you are working on). The list is in order from the things you added earliest to the most recent, so you will work on them in the following order:
           ${todoListItems}
@@ -507,240 +600,320 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         ${conversationHistory}
       `;
 
-      let conversationTurns = [{ role: "user", parts: [{ text: systemPrompt }] }];
+    let conversationTurns = [{ role: "user", parts: [{ text: systemPrompt }] }];
 
-      let response = await callAIWithFallback({
+    let response = await callAIWithFallback({
+      ai,
+      contents: conversationTurns,
+      tools: boxyWebhookTools,
+      appLog: app.log,
+    });
+
+    let loopCount = 0;
+    const MAX_LOOPS = 10;
+    app.log.info(conversationTurns);
+    while (
+      response.functionCalls &&
+      response.functionCalls.length > 0 &&
+      loopCount < MAX_LOOPS
+    ) {
+      loopCount++;
+      const call = response.functionCalls[0];
+      app.log.info(`Boxy requested tool: ${call.name} with args:`, call.args);
+
+      const toolResult = await executeTool(call, context, app);
+
+      conversationTurns.push(response.candidates[0].content);
+
+      if (loopCount == 8) {
+        conversationTurns.push({
+          role: "user",
+          parts: [
+            {
+              text: "(system) You have made 8 tool calls in a row. Are you sure this isn't something best to be saved for later in the todo list? ",
+            },
+          ],
+        });
+      }
+      if (loopCount >= 9) {
+        conversationTurns.push({
+          role: "user",
+          parts: [
+            {
+              text: "(system) You have made over 9 tool calls in a row. You only have 1 left before you hit the limit! ",
+            },
+          ],
+        });
+      }
+
+      conversationTurns.push({
+        role: "user",
+        parts: [
+          {
+            functionResponse: {
+              name: call.name,
+              response: toolResult,
+              id: call.id,
+            },
+          },
+        ],
+      });
+
+      app.log.info("Sending tool results back to Gemini...");
+      response = await callAIWithFallback({
         ai,
         contents: conversationTurns,
         tools: boxyWebhookTools,
-        appLog: app.log
+        appLog: app.log,
       });
+    }
+    if (!response.text) {
+      const finishReason =
+        response.candidates?.[0]?.finishReason || "UNKNOWN_REASON";
+      throw new Error(
+        `Boxy broke reason: ${finishReason}\n Full API Response: ${JSON.stringify(response)}\n\n`,
+      );
+    }
+    let responseText = response.text;
+    app.log.info(response.text);
 
-      let loopCount = 0;
-      const MAX_LOOPS = 10;
-      app.log.info(conversationTurns);
-      while (response.functionCalls && response.functionCalls.length > 0 && loopCount < MAX_LOOPS) {
-        loopCount++;
-        const call = response.functionCalls[0];
-        app.log.info(`Boxy requested tool: ${call.name} with args:`, call.args);
+    const repo = context.repo();
+    if (context.name === "discussion_comment") {
+      return await replyToDiscussionComment(context.octokit, {
+        owner: repo.owner,
+        repo: repo.repo,
+        discussion_comment_id: context.payload.comment.id,
+        discussion_comment_node_id: context.payload.comment.node_id,
+        discussion_node_id:
+          context.payload.discussion?.node_id ||
+          context.payload.comment.node_id,
+        body: responseText,
+      });
+    }
 
-        const toolResult = await executeTool(call, context, app);
- 
-        conversationTurns.push(response.candidates[0].content);
-        
-        if (loopCount == 8) {
-          conversationTurns.push({
-            role: "user",
-            parts: [{ text: "(system) You have made 8 tool calls in a row. Are you sure this isn't something best to be saved for later in the todo list? " }]
-          });
-        }
-        if (loopCount >= 9) {
-          conversationTurns.push({
-            role: "user",
-            parts: [{ text: "(system) You have made over 9 tool calls in a row. You only have 1 left before you hit the limit! " }]
-          });
-        }
- 
-        conversationTurns.push({
-          role: "user",
-          parts: [{ functionResponse: { name: call.name, response: toolResult, id: call.id } }]
-        });
-
-        app.log.info("Sending tool results back to Gemini...");
-        response = await callAIWithFallback({
-          ai,
-          contents: conversationTurns,
-          tools: boxyWebhookTools,
-          appLog: app.log
-        });
-      }
-      if (!response.text) {
-        const finishReason = response.candidates?.[0]?.finishReason || "UNKNOWN_REASON";
-        throw new Error(`Boxy broke reason: ${finishReason}\n Full API Response: ${JSON.stringify(response)}\n\n`);
-      }
-      let responseText = response.text;
-      app.log.info(response.text);
-
-      const repo = context.repo();
-      if (context.name === "discussion_comment") {
-        return await replyToDiscussionComment(context.octokit, {
-          owner: repo.owner,
-          repo: repo.repo,
-          discussion_comment_id: context.payload.comment.id,
-          discussion_comment_node_id: context.payload.comment.node_id,
-          discussion_node_id: context.payload.discussion?.node_id || context.payload.comment.node_id,
-          body: responseText
-        });
-      }
-
-      return await createCommentForContext(context, responseText);
-      
-    } catch (error) {
-      app.log.error("ERROR inside processing block:", error.message);
+    return await createCommentForContext(context, responseText);
+  } catch (error) {
+    app.log.error("ERROR inside processing block:", error.message);
+    try {
+      return await createCommentForContext(
+        context,
+        "i broke 💔💔💔 error <details><summary>Error Details</summary><pre>" +
+          (error.stack || error.message) +
+          "</pre></details>",
+      );
+    } catch (err) {
       try {
-      return await createCommentForContext(context, "i broke 💔💔💔 error <details><summary>Error Details</summary><pre>" + (error.stack || error.message) + "</pre></details>");
-      } catch (err) {
+        const spicyErrorbutItsTruncated = String(
+          error.stack || error.message,
+        ).substring(0, 60000);
+        return await createCommentForContext(
+          context,
+          "# I broke SO BAD that posting the comment to post about the error also errored 💔🥀 <details><summary>Error Details</summary><pre>" +
+            (err.stack || err.message) +
+            "</pre><details><summary>extra error details 🌶️</summary><pre>" +
+            spicyErrorbutItsTruncated +
+            "</pre></details></details>",
+        );
+      } catch (err2) {
+        console.error(err2);
+        app.log.error("something is fricking broke ", err2.message);
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        // just in case stupid github is rate limitiinnig us
         try {
-        const spicyErrorbutItsTruncated = String(error.stack || error.message).substring(0, 60000);
-        return await createCommentForContext(context, "# I broke SO BAD that posting the comment to post about the error also errored 💔🥀 <details><summary>Error Details</summary><pre>" + (err.stack || err.message) + "</pre><details><summary>extra error details 🌶️</summary><pre>" + spicyErrorbutItsTruncated + "</pre></details></details>");
-        } catch (err2) {
-          console.error(err2)
-          app.log.error("something is fricking broke ", err2.message);
-          await new Promise(resolve => setTimeout(resolve, 5000));
-          // just in case stupid github is rate limitiinnig us
+          return await createCommentForContext(
+            context,
+            "i broke SO BAD THAT POSTING THE COMMENT TO POST ABOUT THE ERROR ABOUT THE COMMENT THAT WAS ABOUT THE ERROR ALSO ERRORED 💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀<details><summary>Error Details</summary><pre> lol screw error details something is clearly wrong so bad that including the error details in the comment breaks lol :trollface: go fix this or skill issue</pre></details>",
+          );
+        } catch (err3) {
+          app.log.error("something is LITERALLY broke ", err3.message);
+          await new Promise((resolve) => setTimeout(resolve, 5000));
           try {
-          return await createCommentForContext(context, "i broke SO BAD THAT POSTING THE COMMENT TO POST ABOUT THE ERROR ABOUT THE COMMENT THAT WAS ABOUT THE ERROR ALSO ERRORED 💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀<details><summary>Error Details</summary><pre> lol screw error details something is clearly wrong so bad that including the error details in the comment breaks lol :trollface: go fix this or skill issue</pre></details>");
-          
-          } catch (err3) {
-            app.log.error("something is LITERALLY broke ", err3.message);
-            await new Promise(resolve => setTimeout(resolve, 5000));
-            try {
             return await createCommentForContext(context, "everything broke");
-          }
-            catch (err4) {
-              app.log.error("something is LITERALLY LITERALLY broke ", err4.message);
-              // since teh stupid probot logger doesn't work just make it log to a file instead
-              await fs.appendFile("boxy_error_log.txt", `\n\n${new Date().toISOString()} - something is LITERALLY LITERALLY broke: ${err4.stack || err4.message}\n other error logs: {error1: ${error.stack || error.message}, error2: ${err.stack || err.message}, error3: ${err2.stack || err2.message}, error4: ${err3.stack || err3.message}\n\n}`);
-
-            }
+          } catch (err4) {
+            app.log.error(
+              "something is LITERALLY LITERALLY broke ",
+              err4.message,
+            );
+            // since teh stupid probot logger doesn't work just make it log to a file instead
+            await fs.appendFile(
+              "boxy_error_log.txt",
+              `\n\n${new Date().toISOString()} - something is LITERALLY LITERALLY broke: ${err4.stack || err4.message}\n other error logs: {error1: ${error.stack || error.message}, error2: ${err.stack || err.message}, error3: ${err2.stack || err2.message}, error4: ${err3.stack || err3.message}\n\n}`,
+            );
           }
         }
       }
     }
+  }
 }
-
-
 
 /**
  * @param {import('probot').Probot} app
  */
-export default (app) => { 
+export default (app) => {
   try {
-  startBackgroundQueue(app);
-  complainIfSkillIssue(app);
+    startBackgroundQueue(app);
+    complainIfSkillIssue(app);
 
-  async function preparePrContainer(context) {
-    try {
-      const pr = context.payload.pull_request;
-      if (!pr) return;
-      const repoCloneUrl = context.payload.repository?.clone_url;
-      if (!repoCloneUrl) return;
-      const key = `pr-${pr.number}`;
-      const result = await createBoxyContainer(key, repoCloneUrl, pr.head.ref);
-      app.log.info(`Boxy container ready for ${key}: ${result.containerName} reused=${result.reused}`);
-    } catch (error) {
-      app.log.error(`Failed to prepare Boxy container for PR #${context.payload.pull_request?.number}: ${error.message}`);
-    }
-  }
-
-  async function cleanupPrContainer(context) {
-    try {
-      const pr = context.payload.pull_request;
-      if (!pr) return;
-      const key = `pr-${pr.number}`;
-      const destroyed = await destroyBoxyContainer(key);
-      app.log.info(`Boxy container cleanup for ${key}: destroyed=${destroyed}`);
-    } catch (error) {
-      app.log.error(`Failed to clean up Boxy container for PR #${context.payload.pull_request?.number}: ${error.message}`);
-    }
-  }
-
-  async function startCodeReview(context, app) {
-    try {
-      await preparePrContainer(context);
-      triggerCodeReview(context, app);
-    } catch (error) {
-      app.log.error("ERROR inside code review processing block:", error.message);
+    async function preparePrContainer(context) {
       try {
-      return await createCommentForContext(context, "i broke while trying to code review 💔💔💔 you're stuck with clankerrabbit <details><summary>Error Details</summary><pre>" + (error.stack || error.message) + "</pre></details>");
-      } catch (err) {
-        app.log.error("code review has LITERALLY IMPLODED", err.message);
+        const pr = context.payload.pull_request;
+        if (!pr) return;
+        const repoCloneUrl = context.payload.repository?.clone_url;
+        if (!repoCloneUrl) return;
+        const key = `pr-${pr.number}`;
+        const result = await createBoxyContainer(
+          key,
+          repoCloneUrl,
+          pr.head.ref,
+        );
+        app.log.info(
+          `Boxy container ready for ${key}: ${result.containerName} reused=${result.reused}`,
+        );
+      } catch (error) {
+        app.log.error(
+          `Failed to prepare Boxy container for PR #${context.payload.pull_request?.number}: ${error.message}`,
+        );
+      }
+    }
+
+    async function cleanupPrContainer(context) {
+      try {
+        const pr = context.payload.pull_request;
+        if (!pr) return;
+        const key = `pr-${pr.number}`;
+        const destroyed = await destroyBoxyContainer(key);
+        app.log.info(
+          `Boxy container cleanup for ${key}: destroyed=${destroyed}`,
+        );
+      } catch (error) {
+        app.log.error(
+          `Failed to clean up Boxy container for PR #${context.payload.pull_request?.number}: ${error.message}`,
+        );
+      }
+    }
+
+    async function startCodeReview(context, app) {
+      try {
+        await preparePrContainer(context);
+        triggerCodeReview(context, app);
+      } catch (error) {
+        app.log.error(
+          "ERROR inside code review processing block:",
+          error.message,
+        );
         try {
-          return await createCommentForContext(context, "someone must have a REALLY BAD skill issue because I can't post the comment about the code review error 🫣");
-        } catch (err2) { app.log.error("code review has LITERALLY LITERALLY IMPLODED", err2.message); }
+          return await createCommentForContext(
+            context,
+            "i broke while trying to code review 💔💔💔 you're stuck with clankerrabbit <details><summary>Error Details</summary><pre>" +
+              (error.stack || error.message) +
+              "</pre></details>",
+          );
+        } catch (err) {
+          app.log.error("code review has LITERALLY IMPLODED", err.message);
+          try {
+            return await createCommentForContext(
+              context,
+              "someone must have a REALLY BAD skill issue because I can't post the comment about the code review error 🫣",
+            );
+          } catch (err2) {
+            app.log.error(
+              "code review has LITERALLY LITERALLY IMPLODED",
+              err2.message,
+            );
+          }
+        }
       }
     }
-  }
 
-  app.on(["issue_comment.created", "discussion_comment.created", "issues.opened"], async (context) => {
-    boxyCommentorIssue(context, app, startCodeReview);
-    return;
-  });
+    app.on(
+      ["issue_comment.created", "discussion_comment.created", "issues.opened"],
+      async (context) => {
+        boxyCommentorIssue(context, app, startCodeReview);
+        return;
+      },
+    );
 
-  app.on(["pull_request.opened", "pull_request.synchronize", "pull_request.reopened"], async (context) => await startCodeReview(context, app));
+    app.on(
+      [
+        "pull_request.opened",
+        "pull_request.synchronize",
+        "pull_request.reopened",
+      ],
+      async (context) => await startCodeReview(context, app),
+    );
 
-  app.on("pull_request.closed", async (context) => {
-    await cleanupPrContainer(context);
-  });
+    app.on("pull_request.closed", async (context) => {
+      await cleanupPrContainer(context);
+    });
 
-  app.on("push", async (context) => {
-     // has to be on repo called "Boxy-gh" not the monorepo cuz the is difeernte
-    if (context.payload.repository.name !== "Boxy-gh") {
-//      app.log.info(`not on Boxy-gh repo, so not doing anything : ${context.payload.repository.name}`);
-      return;
-    }    const commitSha = context.payload.head_commit.id;
-    const branch = context.payload.ref.replace("refs/heads/", "");
-    
-    if (branch !== "main") {
-      app.log.info(`not on main branch, so not doing anything : ${branch}`);
-      return;
-    }
- 
-
-
-    // we don't want boxy to update itself when it's busy so we have to trackkkkk when its like pending updatse
-
-    let isBusy = false;
-
-    
-    const todoList = await loadTodoList();
-    for (const [id, item] of Object.entries(todoList)) {
-      if (!item.completed) {
-        isBusy = true;
-        break;
+    app.on("push", async (context) => {
+      // has to be on repo called "Boxy-gh" not the monorepo cuz the is difeernte
+      if (context.payload.repository.name !== "Boxy-gh") {
+        //      app.log.info(`not on Boxy-gh repo, so not doing anything : ${context.payload.repository.name}`);
+        return;
       }
-    }
- 
-    if (!isBusy) {
-      const reviews = await loadReviews();
-      if (Object.keys(reviews).length > 0) { 
-      }
-    }
-    const commit = context.payload.head_commit;
-    const commitAuthor = commit.author.name;
-    if (isBusy) {
-      app.log.info("NO UPDAT");
-      await context.octokit.rest.repos.createCommitComment({
-        owner: context.repo().owner,
-        repo: context.repo().repo,
-        commit_sha: commitSha,
-        body: `Hi @${commitAuthor}! I have acknowledged your commit, but I'm currently busy with other tasks. I'll update myself later when I'm done! 🛠️`
-      });
-      return;
-    } else { 
-      await context.octokit.rest.repos.createCommitComment({
-        owner: context.repo().owner,
-        repo: context.repo().repo,
-        commit_sha: commitSha,
-        body: `@${commitAuthor} I have acknowledged your commit. Assuming this doesn't break me, I'll restart myself with the new changes. If it does, then skill issue.`
-      }); 
-      
-      setTimeout(() => {
-         process.exit(0); 
-      }, 2000);
-    }
-  });
-  app.on("workflow_run.completed", async (context) => {
-    app.log.info("WORKFLO RECEIVED NOW WAIT FOR IT TO FAIL MISERABLY or succeed unexpeectedly")
-    handleWorkflowCompleted(context, app);
-  });
+      const commitSha = context.payload.head_commit.id;
+      const branch = context.payload.ref.replace("refs/heads/", "");
 
-  app.on("pull_request_review_comment.created", async (context) => {
-    handleReviewCommentReply(context, app);
-  });
+      if (branch !== "main") {
+        app.log.info(`not on main branch, so not doing anything : ${branch}`);
+        return;
+      }
+
+      // we don't want boxy to update itself when it's busy so we have to trackkkkk when its like pending updatse
+
+      let isBusy = false;
+
+      const todoList = await loadTodoList();
+      for (const [id, item] of Object.entries(todoList)) {
+        if (!item.completed) {
+          isBusy = true;
+          break;
+        }
+      }
+
+      if (!isBusy) {
+        const reviews = await loadReviews();
+        if (Object.keys(reviews).length > 0) {
+        }
+      }
+      const commit = context.payload.head_commit;
+      const commitAuthor = commit.author.name;
+      if (isBusy) {
+        app.log.info("NO UPDAT");
+        await context.octokit.rest.repos.createCommitComment({
+          owner: context.repo().owner,
+          repo: context.repo().repo,
+          commit_sha: commitSha,
+          body: `Hi @${commitAuthor}! I have acknowledged your commit, but I'm currently busy with other tasks. I'll update myself later when I'm done! 🛠️`,
+        });
+        return;
+      } else {
+        await context.octokit.rest.repos.createCommitComment({
+          owner: context.repo().owner,
+          repo: context.repo().repo,
+          commit_sha: commitSha,
+          body: `@${commitAuthor} I have acknowledged your commit. Assuming this doesn't break me, I'll restart myself with the new changes. If it does, then skill issue.`,
+        });
+
+        setTimeout(() => {
+          process.exit(0);
+        }, 2000);
+      }
+    });
+    app.on("workflow_run.completed", async (context) => {
+      app.log.info(
+        "WORKFLO RECEIVED NOW WAIT FOR IT TO FAIL MISERABLY or succeed unexpeectedly",
+      );
+      handleWorkflowCompleted(context, app);
+    });
+
+    app.on("pull_request_review_comment.created", async (context) => {
+      handleReviewCommentReply(context, app);
+    });
   } catch (e) {
-const trace = e.stack || e.message;
-app.log.error(trace, "AN ERROR OCCURRED");
- process.exit(1);
+    const trace = e.stack || e.message;
+    app.log.error(trace, "AN ERROR OCCURRED");
+    process.exit(1);
   }
 };
