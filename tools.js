@@ -482,6 +482,7 @@ export async function executeTool(call, context, app) {
       token = auth.token;
     } catch (err) {
       app.log.warn(`fail fail fail failure kaboom: ${err.message}`);
+      
     }
 
     app.log.info(`Boxy ran command: ${call.args.command}`);
