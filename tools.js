@@ -476,9 +476,17 @@ export async function executeTool(call, context, app) {
       } catch (error) {
       app.log.info("hurray");
       }
-      app.log.info(`Boxy ran command: ${call.args.command}`);
-      toolResult = await runCommandInBoxyContainer(call.args.command, isBoxyWebhook);
-      app.log.info(`Boxy command result: ${JSON.stringify(toolResult)}`);
+      let token = null;
+    try {
+      const auth = await context.octokit.auth({ type: "installation" });
+      token = auth.token;
+    } catch (err) {
+      app.log.warn(`fail fail fail failure kaboom: ${err.message}`);
+    }
+
+    app.log.info(`Boxy ran command: ${call.args.command}`);
+    toolResult = await runCommandInBoxyContainer(call.args.command, isBoxyWebhook, token);
+    app.log.info(`Boxy command result: ${JSON.stringify(toolResult)}`);
     }
   
     else if (call.name === "update_pr_summary") {

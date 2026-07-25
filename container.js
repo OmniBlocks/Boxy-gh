@@ -6,7 +6,6 @@ const execAsync = promisify(exec);
 const CONTAINER_NAME = "boxy-runner";
 
 // Helper to ensure the persistent container is running
-// Helper to ensure the persistent container is running
 async function ensureContainerRunning() {
   try {
     // Inspect specifically if the container is running
@@ -34,7 +33,7 @@ async function ensureContainerRunning() {
   }
 }
 
-export async function runCommandInBoxyContainer(command, isBoxyWebhook = false) {
+export async function runCommandInBoxyContainer(command, isBoxyWebhook = false, token = null) {
   let isBusy = false;
 
   const todoList = await loadTodoList();
@@ -62,9 +61,23 @@ export async function runCommandInBoxyContainer(command, isBoxyWebhook = false) 
 
   // Ensure persistent container exists before running command
   await ensureContainerRunning();
+ 
+  let commandToExecute = command;
+  if (token) {
+    const isGitCommand = command.includes("git");
+    const isGhCommand = command.includes("gh");
+
+    if (isGitCommand || isGhCommand) {
+      let setup = `export GITHUB_TOKEN=${token}`;
+      if (isGitCommand) { 
+        setup += ` && git config --global url.'https://x-access-token:${token}@github.com/'.insteadOf 'https://github.com/'`;
+      }
+      commandToExecute = `${setup} && ${command}`;
+    }
+  }
 
   // Escape double quotes safely
-  const safeCommand = command.replace(/"/g, '\\"');
+  const safeCommand = commandToExecute.replace(/"/g, '\\"');
 
   // Execute inside the already running container
   const dockerCmd = `docker exec ${CONTAINER_NAME} /bin/sh -c "( ${safeCommand} ) < /dev/null"`;
