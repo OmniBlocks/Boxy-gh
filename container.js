@@ -6,20 +6,30 @@ const execAsync = promisify(exec);
 const CONTAINER_NAME = "boxy-runner";
 
 // Helper to ensure the persistent container is running
+// Helper to ensure the persistent container is running
 async function ensureContainerRunning() {
   try {
-    // Check if the container exists/is running
-    await execAsync(`docker inspect ${CONTAINER_NAME}`);
+    // Inspect specifically if the container is running
+    const { stdout } = await execAsync(
+      `docker inspect -f "{{.State.Running}}" ${CONTAINER_NAME}`
+    );
+
+    if (stdout.trim() === "true") {
+      return; // Container is up and running!
+    }
+
+    await execAsync(`docker start ${CONTAINER_NAME}`);
   } catch (err) {
-    // Container doesn't exist, create and run it in detached mode (-d)
+    // Container doesn't exist at all -> create and run it
     const createCmd = `docker run -d --name ${CONTAINER_NAME} \
+      --restart unless-stopped \
       --memory="256m" \
       --memory-swap="256m" \
       -e CI=true \
       -v /home/gato/boxy-workspace:/workspace \
       -w /workspace \
       node:20-alpine tail -f /dev/null`;
-    
+
     await execAsync(createCmd);
   }
 }
