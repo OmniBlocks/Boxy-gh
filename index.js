@@ -230,8 +230,9 @@ async function startBackgroundQueue(app) {
             Work on this task using your tools. Take your time. However, you must know that NO ONE can see anything you do in this task unless you create a comment to communicate your findings, so you absolutely MUST do that. After you've completed the task, you **MUST** call 'complete_todo_list_item' with the task ID to mark it as done. Do not mark it as done until you are completely finished and have reported your findings. 
             If you don't communicate your findings, all your work WILL be lost and your output is useless. You can use the following tools to help you complete the task:
             1. Search and read code if needed.
-            2. Use 'create_comment' to report your findings on the relevant issue. Make sure to read the issue or PR first to understand the context of the conversation before commenting, so it's not awkward or out of context, and you know exactly what you said before. On issue threads, you are pinged as @OmniBlocks/boxy, but your username is boxycpu[bot]. 
-            3. When you are entirely done, call 'complete_todo_list_item' with id '${taskId}'.
+            2. You have access to a computer to run commands. You can use it to run shell commands, scripts, or any other command-line tools you need. Use this to help you complete the task. You can also use it to check the state of the repository, use the gh cli, or run git commands. This is a very RAM-constrained (256mb) alpine linux environment, so only use this for file editing or PR creating tasks or using git and gh commands, not for running any tests or building projects (like pnpm run build or pnpm test). Do not use it for anything that creates a constant stream like dev servers or watchers since it will just time you out. The container is 100% persistent. Run commands using execute_command.
+            3. Use 'create_comment' to report your findings on the relevant issue. Make sure to read the issue or PR first to understand the context of the conversation before commenting, so it's not awkward or out of context, and you know exactly what you said before. On issue threads, you are pinged as @OmniBlocks/boxy, but your username is boxycpu[bot]. 
+            4. When you are entirely done, call 'complete_todo_list_item' with id '${taskId}'.
 
             
           `;
