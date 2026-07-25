@@ -127,9 +127,19 @@ export async function callAIWithFallback({ contents, tools, appLog }) {
 
         const client = provider.useBackup && aiBackup ? aiBackup : ai;
 
-        const toolList = tools && tools.length > 0
-  ? [{ functionDeclarations: tools }, { googleSearch: {} }]
-  : [{ googleSearch: {} }];
+        let toolList = tools && tools.length > 0 
+          ? [{ functionDeclarations: tools }] 
+          : [];
+
+ 
+        if (!provider.model.startsWith("gemini-3")) {
+          toolList.push({ codeExecution: {} });
+          toolList.push({ googleSearch: {} });
+        }
+
+        if (toolList.length === 0) {
+          toolList = undefined;
+        }
 
         const config = {
           tools: toolList,
