@@ -4,7 +4,7 @@ import { loadTodoList, loadReviews } from "./fs.js";
 
 const execAsync = promisify(exec);
 const CONTAINER_NAME = "boxy-runner";
-const MAX_OUTPUT_SIZE = 200000; 
+const MAX_OUTPUT_SIZE = 200000;  
 
 let activeShell = null;
 let activeTask = null; 
@@ -36,7 +36,7 @@ async function getShell() {
   activeShell.stdout.on("data", (data) => {
     if (!activeTask) return;
     activeTask.stdout += data.toString();
- 
+    
     if (activeTask.stdout.length > MAX_OUTPUT_SIZE) {
       activeTask.stdout = "[...OUTPUT TRUNCATED DUE TO SIZE LIMIT...]\n" + activeTask.stdout.slice(-MAX_OUTPUT_SIZE);
     }
@@ -46,7 +46,6 @@ async function getShell() {
     if (!activeTask) return;
     activeTask.stderr += data.toString();
     
-
     if (activeTask.stderr.length > MAX_OUTPUT_SIZE) {
       activeTask.stderr = "[...STDERR TRUNCATED DUE TO SIZE LIMIT...]\n" + activeTask.stderr.slice(-MAX_OUTPUT_SIZE);
     }
@@ -61,10 +60,7 @@ async function getShell() {
 
   return activeShell;
 }
-
-/**
- * Runs or continues polling a command for a specified time slice (default 10 seconds)
- */
+ 
 export async function runCommandInBoxyContainer(command, isBoxyWebhook = false, token = null, timeSliceMs = 10000) {
   let isBusy = false;
   const todoList = await loadTodoList();
@@ -91,12 +87,14 @@ export async function runCommandInBoxyContainer(command, isBoxyWebhook = false, 
 
   if (!activeTask && command) {
     const uniqueDelimiter = `__BOXY_DELIM_${Date.now()}_${Math.random().toString(36).substring(2, 9)}__`;
+    const pidFile = `/tmp/.boxy_pid_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
     activeTask = {
       stdout: "",
       stderr: "",
       status: "running",
       delimiter: uniqueDelimiter,
+      pidFile,
       command
     };
 
@@ -106,7 +104,9 @@ export async function runCommandInBoxyContainer(command, isBoxyWebhook = false, 
     }
 
     const safeCmd = command.replace(/'/g, "'\\''");
-    const wrappedStr = `setsid sh -c 'echo $$ > /tmp/.boxy_pid; exec ${safeCmd}'; echo "${uniqueDelimiter}$?"\n`;
+    const wrappedStr =
+      `setsid sh -c 'printf "%s\\n" "$$" > "${pidFile}"; exec ${safeCmd}'; ` +
+      `echo "${uniqueDelimiter}$?"\n`;
     
     shellProcess.stdin.write(wrappedStr);
   }
@@ -122,8 +122,12 @@ export async function runCommandInBoxyContainer(command, isBoxyWebhook = false, 
       const exitCodeMatch = outputParts[1].match(/^(\d+)/);
       const exitCode = exitCodeMatch ? parseInt(exitCodeMatch[1], 10) : 0;
       const cleanStderr = activeTask.stderr.trim();
+ 
+      if (activeTask.pidFile) {
+        execAsync(`docker exec ${CONTAINER_NAME} sh -c 'rm -f "${activeTask.pidFile}"'`).catch(() => {});
+      }
 
-      activeTask = null; 
+      activeTask = null;
       return { status: "completed", stdout: cleanStdout, stderr: cleanStderr, exitCode };
     }
 
@@ -132,16 +136,17 @@ export async function runCommandInBoxyContainer(command, isBoxyWebhook = false, 
       return { status: "failed", stderr: "Shell process closed unexpectedly.", exitCode: 1 };
     }
 
-    await new Promise(r => setTimeout(r, 200)); 
+    await new Promise(r => setTimeout(r, 200));
   }
+
   return {
     status: "still_running",
     stdout: activeTask ? activeTask.stdout.trim() : "",
     stderr: activeTask ? activeTask.stderr.trim() : "",
-    message: "The command is taking longer than usual or waiting for interactive input. Look at stdout above. You can call 'send_stdin' to respond, 'wait_command' to continue waiting, or 'kill_command' to terminate it."
+    message: "The command is taking longer than usual or waiting for interactive input. You can call 'send_stdin' to respond, 'wait_command' to continue waiting, or 'kill_command' to terminate it."
   };
 }
-
+ 
 export async function sendStdinToBoxyContainer(text) {
   if (!activeShell || !activeTask) {
     return { error: "No command is currently running to send input to." };
@@ -152,43 +157,97 @@ export async function sendStdinToBoxyContainer(text) {
 
   return await runCommandInBoxyContainer(null, false, null, 10000);
 }
-
+ 
 export async function waitCommandInBoxyContainer(timeSliceMs = 10000) {
   if (!activeTask) {
     return { error: "No command is currently running to wait for." };
   }
   return await runCommandInBoxyContainer(null, false, null, timeSliceMs);
 }
-
-
-/**
- * Kill the currently running command and its child process tree inside the container
- */
+ 
 export async function killCommandInBoxyContainer() {
   if (!activeTask) {
     return { error: "No command is currently running to kill." };
   }
 
+  const task = activeTask;
+  const { pidFile } = task;
+
   try {
-    // Send SIGKILL to the negative PGID (-$PGID) to obliterate the entire process group (children + grandchildren)
-    const killCmd = `docker exec ${CONTAINER_NAME} sh -c 'PGID=$(cat /tmp/.boxy_pid 2>/dev/null); if [ -n "$PGID" ]; then kill -9 -$PGID 2>/dev/null || pkill -9 -P "$PGID" 2>/dev/null; fi'`;
-    await execAsync(killCmd);
+    const { stdout } = await execAsync(
+      `docker exec ${CONTAINER_NAME} sh -c ` +
+      `'i=0; ` +
+      `while [ ! -s "${pidFile}" ] && [ "$i" -lt 40 ]; do ` +
+      `sleep 0.05; i=$((i + 1)); ` +
+      `done; ` +
+      `cat "${pidFile}" 2>/dev/null || true'`
+    );
+
+    const pgid = stdout.trim();
+
+    if (!/^[0-9]+$/.test(pgid)) {
+      return {
+        status: "still_running",
+        message: "The command is starting and cannot be cancelled yet. Try kill_command again momentarily.",
+        last_stdout: task.stdout.split(task.delimiter)[0].trim(),
+        last_stderr: task.stderr.trim()
+      };
+    }
+
+    await execAsync(
+      `docker exec ${CONTAINER_NAME} sh -c ` +
+      `'kill -9 -- "-${pgid}" 2>/dev/null || true'`
+    );
+
+    let groupExited = false;
+    for (let i = 0; i < 40; i++) {
+      const { stdout: alive } = await execAsync(
+        `docker exec ${CONTAINER_NAME} sh -c ` +
+        `'if kill -0 -- "-${pgid}" 2>/dev/null; then echo alive; fi'`
+      );
+
+      if (alive.trim() !== "alive") {
+        groupExited = true;
+        break;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+
+    if (!groupExited) {
+      return {
+        status: "still_running",
+        message: "SIGKILL was sent, but the command process group has not exited yet. Try kill_command again.",
+        last_stdout: task.stdout.split(task.delimiter)[0].trim(),
+        last_stderr: task.stderr.trim()
+      };
+    }
+
+    const partialStdout = task.stdout.split(task.delimiter)[0].trim();
+    const partialStderr = task.stderr.trim();
+
+    if (activeTask === task) {
+      activeTask = null;
+    }
+
+    await execAsync(
+      `docker exec ${CONTAINER_NAME} sh -c 'rm -f "${pidFile}"'`
+    ).catch(() => {});
+
+    return {
+      status: "killed",
+      message: "Command process group and its descendants were forcefully terminated.",
+      last_stdout: partialStdout,
+      last_stderr: partialStderr
+    };
   } catch (err) {
-    // Ignore error if process group already exited
+    return {
+      status: "failed",
+      message: `Failed to cancel command: ${err.message}`,
+      last_stdout: task.stdout.split(task.delimiter)[0].trim(),
+      last_stderr: task.stderr.trim()
+    };
   }
-
-  await new Promise(r => setTimeout(r, 300));
-
-  const partialStdout = activeTask ? activeTask.stdout.split(activeTask.delimiter)[0].trim() : "";
-  const partialStderr = activeTask ? activeTask.stderr.trim() : "";
-  activeTask = null;
-
-  return {
-    status: "killed",
-    message: "Command and all descendant processes in its process group were forcefully terminated.",
-    last_stdout: partialStdout,
-    last_stderr: partialStderr
-  };
 }
 
 export async function getBoxyCwd() {
