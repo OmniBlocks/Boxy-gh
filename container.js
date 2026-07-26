@@ -106,7 +106,7 @@ export async function runCommandInBoxyContainer(command, isBoxyWebhook = false, 
     }
 
     const safeCmd = command.replace(/'/g, "'\\''");
-    const wrappedStr = `sh -c 'echo $$ > /tmp/.boxy_pid; exec ${safeCmd}'; echo "${uniqueDelimiter}$?"\n`;
+    const wrappedStr = `setsid sh -c 'echo $$ > /tmp/.boxy_pid; exec ${safeCmd}'; echo "${uniqueDelimiter}$?"\n`;
     
     shellProcess.stdin.write(wrappedStr);
   }
@@ -170,15 +170,14 @@ export async function killCommandInBoxyContainer() {
   }
 
   try {
-    // Safely terminate both child processes and the parent PID inside the container
-    const killCmd = `docker exec ${CONTAINER_NAME} sh -c 'PID=$(cat /tmp/.boxy_pid 2>/dev/null); if [ -n "$PID" ]; then pkill -9 -P "$PID" 2>/dev/null; kill -9 "$PID" 2>/dev/null; fi'`;
+    // Send SIGKILL to the negative PGID (-$PGID) to obliterate the entire process group (children + grandchildren)
+    const killCmd = `docker exec ${CONTAINER_NAME} sh -c 'PGID=$(cat /tmp/.boxy_pid 2>/dev/null); if [ -n "$PGID" ]; then kill -9 -$PGID 2>/dev/null || pkill -9 -P "$PGID" 2>/dev/null; fi'`;
     await execAsync(killCmd);
   } catch (err) {
-    // Ignore error if process already exited
+    // Ignore error if process group already exited
   }
 
-  // Brief pause to allow container stream cleanup
-  await new Promise(r => setTimeout(r, 500));
+  await new Promise(r => setTimeout(r, 300));
 
   const partialStdout = activeTask ? activeTask.stdout.split(activeTask.delimiter)[0].trim() : "";
   const partialStderr = activeTask ? activeTask.stderr.trim() : "";
@@ -186,7 +185,7 @@ export async function killCommandInBoxyContainer() {
 
   return {
     status: "killed",
-    message: "Command and all associated child processes were forcefully terminated (SIGKILL).",
+    message: "Command and all descendant processes in its process group were forcefully terminated.",
     last_stdout: partialStdout,
     last_stderr: partialStderr
   };
