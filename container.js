@@ -107,7 +107,7 @@ export async function runCommandInBoxyContainer(command, isBoxyWebhook = false, 
 
     const safeCmd = command.replace(/'/g, "'\\''");
     const wrappedStr =
-      `setsid sh -c 'printf "%s\\n" "$$" > "${pidFile}"; exec ${safeCmd}'; ` +
+      `setsid sh -c 'printf "%s\\n" "$$" > "${pidFile}"; ${safeCmd}'; ` +
       `echo "${uniqueDelimiter}$?"\n`;
     
     shellProcess.stdin.write(wrappedStr);
