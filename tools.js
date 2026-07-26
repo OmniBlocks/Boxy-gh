@@ -544,7 +544,8 @@ export async function executeTool(call, context, app) {
     }
   
     else if (call.name === "update_pr_summary") {
-      await context.octokit.rest.issues.updateComment({ owner, repo, comment_id: call.args.comment_id, body: call.args.body });
+      let commentBody = "<!-- BOXY REVIEW COMMENT -->\n" + call.args.body;
+      await context.octokit.rest.issues.updateComment({ owner, repo, comment_id: call.args.comment_id, body: commentBody });
       toolResult = { status: "success" };
     }
     else if (call.name === "create_inline_comment") {
