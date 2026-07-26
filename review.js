@@ -29,7 +29,7 @@ export async function triggerCodeReview(context, app) {
   if (pr.user.type === "Bot" || author.includes("[bot]")) return;
 
   const comments = await context.octokit.paginate(context.octokit.rest.issues.listComments, {
-    owner: context.repo().owner, repo: context.repo().repo, issue_number: pr.number, per_page: 500
+    owner: context.repo().owner, repo: context.repo().repo, issue_number: pr.number, per_page: 100
   });
 
   let boxyComment = comments.find(c => c.user.login === "boxycpu[bot]" && c.body.includes("<!-- BOXY REVIEW COMMENT -->"));
@@ -137,9 +137,9 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
   await saveReviews(reviews);
   app.log.info(`Starting Deep Review Agent for PR #${prNum}...`);
   // now get the pr comments so boxy can see if there's a previous review already.
-  const prIssueReskinComments = await context.octokit.paginate(context.octokit.rest.issues.listComments, { owner: context.repo().owner, repo: context.repo().repo, issue_number: prNum, per_page: 50 });
+  const prIssueReskinComments = await context.octokit.paginate(context.octokit.rest.issues.listComments, { owner: context.repo().owner, repo: context.repo().repo, issue_number: prNum, per_page: 100 });
   // ^^ the above is only half joke btw. pr comments are just reskinned issue comments. only review comemnts are unique to prs
-  const reviewComments = await context.octokit.paginate(context.octokit.rest.pulls.listReviewComments, { owner: context.repo().owner, repo: context.repo().repo, pull_number: prNum, per_page: 500 });
+  const reviewComments = await context.octokit.paginate(context.octokit.rest.pulls.listReviewComments, { owner: context.repo().owner, repo: context.repo().repo, pull_number: prNum, per_page: 100 });
   // Formal reviews (best-effort: don't let this block the review if it fails)
   let formalReviews = [];
   try {
@@ -204,7 +204,7 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
        - Then, a short poem from your perspective (Boxy) about the PR. The poem should be in quote blocks like > under a small #### heading.
        - Finally, the screenshots under a heading exactly called "### GUI Screenshots". If there are no screenshots, this means the tests found no changes in the GUI (or broke the build).
        - (optional) Slop and Spam detection: If you feel that the PR is slop or spam (such as the pr title/description and diff making absolutely no sense) you can make an optional heading called Slop Detected and explain your reasoning wrapped in a quote block with a [!WARNING] markdown feature. If it's not, then just don't add this section at all.
-    4. Post inline review comments using 'create_inline_comment'. You must use the exact 'path' and 'line' (new line number) from the diff. You can specify a single line, or comment on a range of lines by passing both 'start_line' and 'line'. You may post comments, may include opinionated ones such as design choices and other stufff. You can also make suggestions. When you want to propose a code change, you can use a suggestion markdown codeblock. Like when making code blocks, instead of any specific language, the first line must be three backticks followed by the word 'suggestion', and the entire block of code (using the range or line you provided for the inline comment) with the change you wanted to propose. However, you must still add context about this, so never just give a suggestion without explaining it. Suggestions are not mandatory in the sense that you can just... not do it, but it's highly encouraged for any type of change you want. If you're replacing multiple lines of code, make sure you make the comment have a range, otherwise you'd be replacing a single line with those multiple lines, duplicating code and breaking it.
+    4. Post inline review comments using 'create_inline_comment'. You must use the exact 'path' and 'line' (new line number) from the diff. You can specify a single line, or comment on a range of lines by passing both 'start_line' and 'line'. You may post comments, may include opinionated ones such as design choices and other stufff. You can also make suggestions. When you want to propose a code change, you can use a suggestion markdown codeblock. Like when making code blocks, instead of any specific language, the first line must be three backticks followed by the word 'suggestion', and the entire block of code (using the range or line you provided for the inline comment) with the change you wanted to propose. However, you must still add context about this, so never just give a suggestion without explaining it. Suggestions are not mandatory in the sense that you can just... not do it, but it's highly encouraged for any type of change you want. If you're replacing multiple lines of code, make sure you make the comment have a range, otherwise you'd be replacing a single line with those multiple lines, duplicating code and breaking it. Please make sure to not give duplicate review comments (whether you or another reviewer gave them). If a comment got resolved in a recent commit, check it and resolve the comment with gh cli.
     5. Finally, use 'finish_pr_review' with APPROVE, REQUEST_CHANGES, or COMMENT to submit your final decision. When you do this, include a shorter summary of your findings with the main things that need to be changed, since you already gave the detailed summary with 'update_pr_summary'. With this tool, instead of summarizing what the PR does or changes, this is your time to give what actually needs to change among other things. Basically, just don't repeat what you already said in the main summary. Also ping the pr author with a @mention. 
 
     Be strict in the technical sense, but don't write like a grumpy old man. Write in a friendly, casual, and even playful tone! No profanity or offensive language, as OmniBlocks is targeted for all ages, including (but not limited to) kids. So don't use bad words in your own comments, and flag offensive content in the PR as well in the form of inline comments.
@@ -276,12 +276,12 @@ export async function handleReviewCommentReply(context, app) {
 
     const reviewComments = await context.octokit.paginate(
       context.octokit.rest.pulls.listReviewComments,
-      { owner, repo, pull_number: prNum, per_page: 500 }
+      { owner, repo, pull_number: prNum, per_page: 100   }
     );
 
     const normalIssueComments = await context.octokit.paginate(
       context.octokit.rest.issues.listComments,
-      { owner, repo, issue_number: prNum, per_page: 500 }
+      { owner, repo, issue_number: prNum, per_page: 100 }
     );
 
     // Fetch formal PR reviews (best-effort: don't let this block context assembly if it fails)

@@ -148,7 +148,6 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
           ? [{ functionDeclarations: tools }] 
           : [];
 
-
         if (!provider.model.startsWith("gemini-3")) {
           toolList.push({ codeExecution: {} });
           toolList.push({ googleSearch: {} });
@@ -160,8 +159,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         let thinkingLvl = "minimal";
 
         if (needsBigBrain || provider.model.startsWith("gemma")) {
-          thinkingLvl = "high"
-
+          thinkingLvl = "high";
         }
         const config = {
           tools: toolList,
@@ -174,21 +172,20 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
           }
         };
 
+        // EXCEPTION FOR GOOGLE: Normalize history and ensure thought_signature exists on every tool call in history
         const normalizedContents = (contents || []).map(content => {
           if (content && content.role === "model" && Array.isArray(content.parts)) {
             const parts = content.parts.map(part => {
               if (part && part.functionCall) {
-                const sig = part.functionCall.thoughtSignature || part.functionCall.thought_signature;
-                if (sig) {
-                  return {
-                    ...part,
-                    functionCall: {
-                      ...part.functionCall,
-                      thoughtSignature: sig,
-                      thought_signature: sig
-                    }
-                  };
-                }
+                const sig = part.functionCall.thoughtSignature || part.functionCall.thought_signature || part.thoughtSignature || "";
+                return {
+                  ...part,
+                  functionCall: {
+                    ...part.functionCall,
+                    thoughtSignature: sig,
+                    thought_signature: sig
+                  }
+                };
               }
               return part;
             });
@@ -204,6 +201,18 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         });
 
         const parts = response.candidates?.[0]?.content?.parts || [];
+
+        // Ensure real Gemini 3 thinking signatures are preserved on the returned parts and function calls
+        for (const part of parts) {
+          if (part && part.functionCall) {
+            const sig = part.functionCall.thoughtSignature || part.functionCall.thought_signature || part.thoughtSignature;
+            if (sig) {
+              part.functionCall.thought_signature = sig;
+              part.functionCall.thoughtSignature = sig;
+            }
+          }
+        }
+
         const functionCalls = parts
           .filter(part => part && part.functionCall)
           .map(part => part.functionCall);
