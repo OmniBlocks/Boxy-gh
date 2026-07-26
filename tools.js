@@ -53,6 +53,7 @@ const sendStdinDeclaration = {
   },
 };
 
+
 const waitCommandDeclaration = {
   name: "wait_command",
   description: "Give a currently running command another slice of time (10-40 seconds) to continue executing.",
