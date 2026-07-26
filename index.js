@@ -332,7 +332,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
   app.log.info("working...");
 
   const isDiscussion = context.name === "discussion_comment";
-  const isPullRequest = !!context.payload.issue.pull_request;
+  const isPullRequest = !!context.payload.issue?.pull_request;
   const isIssueComment = context.name === "issue_comment";
   const isComment = isIssueComment || isDiscussion;
   const mentionHandle = process.env.BOXY_MENTION_HANDLE || "@OmniBlocks/boxy";
