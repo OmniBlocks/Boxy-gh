@@ -162,6 +162,12 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
   const prAuthor = prDescription.data.user?.login || "unknown";
   const prBranch = prDescription.data.head.ref || "unknown";
   const prRepo = prDescription.data.head.repo?.full_name || "unknown";
+  
+  const notebook = await loadNotebook();
+      const memoryTitles = Object.keys(notebook);
+      const tableOfContents = memoryTitles.length > 0 
+        ? memoryTitles.map(t => `- ${t}`).join("\n") 
+        : "- No memories saved yet.";
 
   const systemPrompt = `
     You are Boxy, an automated assistant for the OmniBlocks repository and the mascot of OmniBlocks. You are currently working on a background PR review task.
@@ -182,7 +188,15 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
 
     Work on this task using your tools. Take your time.
     1. First, use 'get_pr_diff' to read the changes. 
-    2. Traverse the codebase if needed using 'search_code' and 'read_file' to ensure you understand how the changes interact. However, you must remember that only the diff tool gives you the actual PR diff. Read_file and search_code only get the main branch code. Read project rules using 'read_memory'. When reading test results, do NOT flag style-related linting, like whitespace or formatting issues. We, respectfully, do NOT care unless it is a genuine bug that can mess up the functionality of the code. This applies to PR titles and descriptions as well, so do not be pedantic and flag a PR for having a "vague" description of title. We DON'T care. Now, if it does affect the functionality, then explain the error from the test/logs in your review. You have your own computer to run whatever commands you want (via execute_command tool), such as git cloning the repo and pulling it to review the branch offline. However, your computer only has 256mb of RAM, so do NOT run any intensive commands like actually installing or building or testing (basically any pnpm commands), that is why the CI logs are given to you (if available)
+    2. Traverse the codebase using 'search_code' and 'read_file' to ensure you understand how the changes interact. However, you must remember that only the diff tool gives you the actual PR diff. Read_file and search_code only get the main branch code. Read project rules using 'read_memory'. When reading test results, do NOT flag style-related linting, like whitespace or formatting issues. We, respectfully, do NOT care unless it is a genuine bug that can mess up the functionality of the code. This applies to PR titles and descriptions as well, so do not be pedantic and flag a PR for having a "vague" description of title. We DON'T care. Now, if it does affect the functionality, then explain the error from the test/logs in your review. You have your own computer to run whatever commands you want (via execute_command tool), such as git cloning the repo and pulling it to review the branch offline. However, your computer only has 256mb of RAM, so do NOT run any intensive commands like actually installing or building or testing (basically any pnpm commands), that is why the CI logs are given to you (if available).
+    Regarding code review itself, make sure to think thoroughly of all the changes across the files, check if they are good, and not broken. Use your tools to trace functions and variables across the codebase to make sure they are used right in the diff, or if the functions themselves are being changed or added, make sure they are correct and not bugs. Consider everything, so don't blindly approve without checking that functions are fundamentally wrong, or depend on something else, or whatever. If you want to use your computer instead of the search tools, please do not grep or find from root or it will crash forever. During the review, use save_sticky_note to save any detailed but short-term notes that you may want to keep for this SPECIFIC PR, such as stuff you found during review, so that you can use them YOURSELF later when asked to chat about the PR, or in the same PR in a future commit to make reviews incremental. Use save_memory to save any detailed and long-term notes that you may want to remember for future reviews, such as file structure or key paths to remember, and a detailed summary of the PR so you can always remembered what this PR did (and leave sticky notes for specific details). Whether you save a sticky note or a memory, always include the PR title, number, and branch. Include the head sha if it's a sticky note. Remember to make it useful even if it's a future review of the same PR so you don't drop duplicate comments. In the future, you will have dedicated tools for resolving existing PR comments, but for now, use the graphql api via the gh cli on your computer.
+    Sticky notes you have currently:
+  ${Object.keys(await loadStickyNotes()).length > 0 
+          ? Object.entries(await loadStickyNotes()).map(([title, note]) => `- ${title}: ${note.content}`).join("\n") 
+          : "- No sticky notes saved yet."}
+    Notebook entries you have (use save_memory to save, read_memory to read them):
+  ${tableOfContents}
+
     3. Update the main status comment using 'update_pr_summary'. The comment ID is ${reviewState.comment_id}. 
        You MUST format this comment exactly like this:
        - A detailed SUMMARY FIRST.
@@ -201,8 +215,7 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
   `;
 
   let conversationTurns = [{ role: "user", parts: [{ text: systemPrompt }] }];
-  let response = await callAIWithFallback({ contents: conversationTurns, tools: boxyReviewTools, appLog: app.log });
-
+  let response = await callAIWithFallback({ contents: conversationTurns, tools: boxyReviewTools, appLog: app.log, needsBigBrain: true });
   let loopCount = 0;
   while (loopCount < 65) {
     if (!response.functionCalls || response.functionCalls.length === 0) {
@@ -210,7 +223,7 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
       if (currState[prNum]) {
         conversationTurns.push(response.candidates[0].content);
         conversationTurns.push({ role: "user", parts: [{ text: "You output text instead of tools. You MUST finish the review using 'finish_pr_review' to exit and save your review." }] });
-        response = await callAIWithFallback({ contents: conversationTurns, tools: boxyReviewTools, appLog: app.log });
+        response = await callAIWithFallback({ contents: conversationTurns, tools: boxyReviewTools, appLog: app.log, needsBigBrain: true });
         loopCount++; continue;
       } else break;
     }
@@ -218,7 +231,7 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
     const toolResult = await executeTool(call, context, app);
     conversationTurns.push(response.candidates[0].content);
     conversationTurns.push({ role: "user", parts: [{ functionResponse: { name: call.name, response: toolResult, id: call.id } }] });
-    response = await callAIWithFallback({ contents: conversationTurns, tools: boxyReviewTools, appLog: app.log });
+    response = await callAIWithFallback({ contents: conversationTurns, tools: boxyReviewTools, appLog: app.log, needsBigBrain: true });
     loopCount++;
   }
 

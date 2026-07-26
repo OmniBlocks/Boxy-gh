@@ -77,7 +77,9 @@ export function formatGoogleCommentText(parts, elapsedSeconds) {
 
   return answerText ? `${details}\n\n${answerText}` : details;
 }
-export async function callAIWithFallback({ contents, tools, appLog }) {
+export async function callAIWithFallback({ contents, tools, appLog, needsBigBrain = false }) {
+  // needs big brain is optional param for when stronk models for thinking reviews or smth
+
   const providers = [
     { name: "gemini-3.5-flash-lite", type: "google", model: "gemini-3.5-flash-lite", useBackup: false },
     { name: "gemini-3.1-flash-lite", type: "google", model: "gemini-3.1-flash-lite", useBackup: false },
@@ -110,9 +112,23 @@ export async function callAIWithFallback({ contents, tools, appLog }) {
     //{ name: "siliconflow-qwen-2.5-72b", type: "siliconflow", model: "Qwen/Qwen2.5-72B-Instruct" }
   ];
 
+  const bigBrainProviders = [
+    { name: "gemini-3.5-flash-lite", type: "google", model: "gemini-3.5-flash", useBackup: false },
+    { name: "mistral-large", type: "mistral", model: "mistral-large-latest", useBackup: false },
+    { name: "gemma-4-31b-it", type: "google", model: "gemma-4-31b-it", useBackup: false },
+    { name: "command-a-plus-05-2026", type: "cohere", model: "command-a-plus-05-2026", useBackup: false },
+    { name: "gemini-3.6-flash", type: "google", model: "gemini-3.6-flash", useBackup: false },
+    { name: "gemini-3.5-flash-lite-backup", type: "google", model: "gemini-3.5-flash", useBackup: true },
+    { name: "gemma-4-31b-it-backup", type: "google", model: "gemma-4-31b-it", useBackup: true },
+    { name: "gemini-3.6-flash-backup", type: "google", model: "gemini-3.6-flash", useBackup: true }
+
+  ];
+  
+  const providersToUse = needsBigBrain ? bigBrainProviders : providers;
+
   let lastError = null;
 
-  for (const provider of providers) {
+  for (const provider of providersToUse) {
     // log provider and model regardless of failure so i can know what stupid model the script is calling
     appLog && appLog.info(`Currently trying: ${provider.name} with model: ${provider.model}`);
     const startTime = Date.now();
@@ -141,14 +157,20 @@ export async function callAIWithFallback({ contents, tools, appLog }) {
         if (toolList.length === 0) {
           toolList = undefined;
         }
+        let thinkingLvl = "minimal";
 
+        if (needsBigBrain || provider.model.startsWith("gemma")) {
+          thinkingLvl = "high"
+
+        }
         const config = {
           tools: toolList,
           toolConfig: {
             includeServerSideToolInvocations: true
           },
           thinkingConfig: {
-            includeThoughts: true
+            includeThoughts: true,
+            thinkingLevel: thinkingLvl
           }
         };
 

@@ -265,6 +265,11 @@ export const boxyReviewTools = [
   createInlineCommentDeclaration,
   finishPrReviewDeclaration,
   executeCommandDeclaration,
+  sendStdinDeclaration,
+  waitCommandDeclaration,
+  killCommandDeclaration,
+  reactCommentDeclaration,
+  saveStickyNoteDeclaration,
  closeOrOpenIssueDeclaration
 ];
 export const boxyWebhookTools = [
