@@ -148,7 +148,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
           ? [{ functionDeclarations: tools }] 
           : [];
 
- 
+
         if (!provider.model.startsWith("gemini-3")) {
           toolList.push({ codeExecution: {} });
           toolList.push({ googleSearch: {} });
@@ -174,14 +174,43 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
           }
         };
 
+        const normalizedContents = (contents || []).map(content => {
+          if (content && content.role === "model" && Array.isArray(content.parts)) {
+            const parts = content.parts.map(part => {
+              if (part && part.functionCall) {
+                const sig = part.functionCall.thoughtSignature || part.functionCall.thought_signature;
+                if (sig) {
+                  return {
+                    ...part,
+                    functionCall: {
+                      ...part.functionCall,
+                      thoughtSignature: sig,
+                      thought_signature: sig
+                    }
+                  };
+                }
+              }
+              return part;
+            });
+            return { ...content, parts };
+          }
+          return content;
+        });
+
         const response = await client.models.generateContent({
           model: provider.model,
-          contents: contents,
+          contents: normalizedContents,
           config: config
         });
 
-        const functionCalls = response.functionCalls || [];
         const parts = response.candidates?.[0]?.content?.parts || [];
+        const functionCalls = parts
+          .filter(part => part && part.functionCall)
+          .map(part => part.functionCall);
+
+        if (functionCalls.length === 0 && response.functionCalls) {
+          functionCalls.push(...response.functionCalls);
+        }
 
         let answerText = "";
         for (const part of parts) {
@@ -240,14 +269,13 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
             {
               content: {
                 role: "model",
-                parts: parts.length > 0 ? parts : (functionCalls.length > 0 ? functionCalls.map(c => ({ functionCall: c })) : [{ text: answerText }])
+                parts: parts.length > 0 ? parts : [{ text: answerText }]
               }
             }
           ],
           text: formattedText
         };
       }
-
       if (provider.type === "cerebras") {
         if (!process.env.CEREBRAS_API_KEY) {
           continue;

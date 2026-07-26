@@ -55,11 +55,11 @@ const sendStdinDeclaration = {
 
 const waitCommandDeclaration = {
   name: "wait_command",
-  description: "Give a currently running command another slice of time (10-20 seconds) to continue executing.",
+  description: "Give a currently running command another slice of time (10-40 seconds) to continue executing.",
   parameters: {
     type: Type.OBJECT,
     properties: {
-      seconds: { type: Type.INTEGER, description: "Number of seconds to wait (default 10)." }
+      seconds: { type: Type.INTEGER, description: "Number of seconds to wait." }
     }
   },
 };
