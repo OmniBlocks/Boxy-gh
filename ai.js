@@ -113,12 +113,12 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
   ];
 
   const bigBrainProviders = [
-    { name: "gemini-3.5-flash-lite", type: "google", model: "gemini-3.5-flash", useBackup: false },
+    { name: "gemini-3.5-flash-lite", type: "google", model: "gemini-3.5-flash-lite", useBackup: false },
     { name: "mistral-large", type: "mistral", model: "mistral-large-latest", useBackup: false },
     { name: "gemma-4-31b-it", type: "google", model: "gemma-4-31b-it", useBackup: false },
     { name: "command-a-plus-05-2026", type: "cohere", model: "command-a-plus-05-2026", useBackup: false },
     { name: "gemini-3.6-flash", type: "google", model: "gemini-3.6-flash", useBackup: false },
-    { name: "gemini-3.5-flash-lite-backup", type: "google", model: "gemini-3.5-flash", useBackup: true },
+    { name: "gemini-3.5-flash-lite-backup", type: "google", model: "gemini-3.5-flash-lite", useBackup: true },
     { name: "gemma-4-31b-it-backup", type: "google", model: "gemma-4-31b-it", useBackup: true },
     { name: "gemini-3.6-flash-backup", type: "google", model: "gemini-3.6-flash", useBackup: true }
 
