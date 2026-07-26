@@ -71,18 +71,20 @@ export async function runCommandInBoxyContainer(command, isBoxyWebhook = false, 
     const reviews = await loadReviews();
     if (Object.keys(reviews).length > 0) isBusy = true;
   }
-  if (isBusy && isBoxyWebhook) {
-    return { stdout: "", stderr: "You're using the computer to work on another task on your to-do list right now.", exitCode: 1 };
-  }
+  
 
   const shellProcess = await getShell();
 
   if (activeTask && command) {
+    if (isBusy && isBoxyWebhook) {
+    return { stdout: "", stderr: "You're using the computer to work on another task on your to-do list right now.", exitCode: 1 };
+  } else {
     return {
       status: "busy",
       stderr: "The container is currently busy executing another command. Use 'send_stdin' to reply to prompts, 'wait_command' to give it more time, or 'kill_command' to stop it.",
       exitCode: 1
     };
+  }
   }
 
   if (!activeTask && command) {
