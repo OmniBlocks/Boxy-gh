@@ -29,7 +29,7 @@ const saveMemoryDeclaration = {
 };
 const executeCommandDeclaration = {
   name: "execute_command",
-  description: "Execute a bash shell command in your computer. To edit an existing file, prefer the 'edit_file' tool instead of shell tricks like sed/cat/heredocs - it's far less error-prone. Still use this tool to create new files, run git commands, or anything else that isn't editing an existing file's contents.",
+  description: "Execute a bash shell command in your computer. To edit an existing file, prefer the 'edit_file' tool instead of shell tricks like sed/cat/heredocs - it's far less error-prone. Still use this tool to create new files, run git commands, use curl, or anything else that isn't editing an existing file's contents. This is a minimal Alpine Linux environment, so a tool you expect (git, curl, etc.) might not be installed yet. Check first with e.g. 'which git curl' and if something's missing, install it with 'apk add <package>' (Alpine Package Keeper). The container is persistent, so anything you install stays around for next time.",
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -453,8 +453,7 @@ export async function executeTool(call, context, app) {
     }
     else if (call.name === "label_issue") {
       const label = call.args.label;
-      await labelIssue(context, label);
-      toolResult = { status: "success", message: `Label '${label}' added to the issue.` };
+      toolResult = await labelIssue(context, label);
     }
     else if (call.name === "close_or_open_issue") {
       const state = call.args.state;
@@ -648,9 +647,10 @@ export async function executeTool(call, context, app) {
         }
         reviews[prKey].draft_comments.push(commentObj);
         await saveReviews(reviews);
+        toolResult = { status: "success", message: "Inline comment drafted. It will be posted when finish_pr_review is called." };
+      } else {
+        toolResult = { error: `No active review found for PR #${prKey}. The comment was NOT drafted or saved, so do not tell anyone it was. Double check 'pull_number' matches the PR you are actually reviewing.` };
       }
-
-      toolResult = { status: "success", message: "Inline comment drafted. It will be posted when finish_pr_review is called." };
     }
     else if (call.name === "finish_pr_review") {
       const reviews = await loadReviews();
