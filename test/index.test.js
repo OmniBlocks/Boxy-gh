@@ -1,6 +1,6 @@
 import nock from "nock";
 // Requiring our app implementation
-import myProbotApp from "../index.js";
+import myProbotApp from "../src/index.js";
 import { Probot, ProbotOctokit } from "probot";
 const issueCreatedBody = { body: "Thanks for opening this issue!" };
 import fs from "node:fs";
