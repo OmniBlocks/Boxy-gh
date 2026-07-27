@@ -228,6 +228,21 @@ const finishPrReviewDeclaration = {
     required: ["pull_number", "event", "body"]
   }
 };
+const createPullRequestDeclaration = {
+  name: "create_pull_request",
+  description: "Open a real pull request on GitHub from a branch you have already committed and pushed (e.g. via git in execute_command). This calls the GitHub API directly, so the result you get back is the true, authoritative outcome. Do NOT use 'gh pr create' inside execute_command to open a pull request and do NOT tell anyone a PR was submitted based on shell output alone. Always use this tool, and only report a PR as created if this tool returns status 'success'.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      title: { type: Type.STRING, description: "The pull request title." },
+      head: { type: Type.STRING, description: "The name of the branch containing your changes, already pushed to the remote (e.g. 'boxy/fix-typo')." },
+      base: { type: Type.STRING, description: "The branch you want to merge into. Defaults to the repository's default branch if omitted." },
+      body: { type: Type.STRING, description: "The pull request description." },
+      draft: { type: Type.BOOLEAN, description: "Whether to open this as a draft pull request." }
+    },
+    required: ["title", "head", "body"],
+  },
+};
 const reactCommentDeclaration = {
   name: "react_comment",
   description: "React to an issue comment.",
@@ -285,7 +300,8 @@ export const boxyWebhookTools = [
   saveTodoListItemDeclaration,
   reactCommentDeclaration,
   executeCommandDeclaration,
-  sendStdinDeclaration,   
+  createPullRequestDeclaration,
+  sendStdinDeclaration,
   waitCommandDeclaration,
   killCommandDeclaration
 ];
@@ -302,6 +318,7 @@ export const boxyBackgroundTools = [
   completeTodoListItemDeclaration,
   createCommentDeclaration,
   executeCommandDeclaration,
+  createPullRequestDeclaration,
   sendStdinDeclaration,
   waitCommandDeclaration,
   killCommandDeclaration
@@ -528,6 +545,34 @@ export async function executeTool(call, context, app) {
     app.log.info(`Boxy ran command: ${call.args.command}`);
     toolResult = await runCommandInBoxyContainer(call.args.command, isBoxyWebhook, token);
     app.log.info(`Boxy command result: ${JSON.stringify(toolResult)}`);
+    }
+    else if (call.name === "create_pull_request") {
+      const { title, head, body, draft } = call.args;
+      let base = call.args.base;
+      if (!base) {
+        const { data: repoData } = await context.octokit.rest.repos.get({ owner, repo });
+        base = repoData.default_branch;
+      }
+
+      try {
+        const { data } = await context.octokit.rest.pulls.create({
+          owner, repo, title, head, base, body, draft: !!draft
+        });
+        app.log.info(`Boxy opened PR #${data.number} on ${owner}/${repo}: ${data.html_url}`);
+        toolResult = {
+          status: "success",
+          pull_request_number: data.number,
+          pull_request_url: data.html_url,
+          message: `Pull request #${data.number} was actually created on GitHub: ${data.html_url}. This is confirmed by the GitHub API, not a guess.`
+        };
+      } catch (err) {
+        const apiErrors = err.response?.data?.errors ? JSON.stringify(err.response.data.errors) : null;
+        app.log.warn(`Boxy failed to create PR on ${owner}/${repo} (head=${head}, base=${base}): ${err.message}`);
+        toolResult = {
+          status: "failed",
+          error: `GitHub rejected this pull request (head='${head}', base='${base}' on ${owner}/${repo}): ${err.message}${apiErrors ? " - " + apiErrors : ""}. The PR was NOT created. Do not tell anyone it was submitted. Common causes: the branch wasn't actually pushed to this repo, there are no commits between base and head, or a PR already exists for this branch.`
+        };
+      }
     }
     else if (call.name === "send_stdin") {
       app.log.info(`Boxy sending stdin: ${call.args.text}`);
