@@ -1,7 +1,7 @@
 import { Type } from "@google/genai";
 import { labelIssue, issueCloseOrOpen } from "./index.js";
 import { loadNotebook, saveMemoryToFile, saveStickyNoteToFile, createTodoListItem, loadTodoList, saveTodoList, loadReviews, saveReviews } from "./fs.js";
-import { runCommandInBoxyContainer, sendStdinToBoxyContainer, waitCommandInBoxyContainer, killCommandInBoxyContainer } from "./container.js";
+import { runCommandInBoxyContainer, sendStdinToBoxyContainer, waitCommandInBoxyContainer, killCommandInBoxyContainer, editFileInBoxyContainer } from "./container.js";
 import { executeSafely, redactSecrets } from "./safety_filter.js";
 
 
@@ -30,16 +30,43 @@ const saveMemoryDeclaration = {
 };
 const executeCommandDeclaration = {
   name: "execute_command",
-  description: "Execute a bash shell command in your computer.",
+  description: "Execute a bash shell command in your computer. To edit an existing file, prefer the 'edit_file' tool instead of shell tricks like sed/cat/heredocs - it's far less error-prone. Still use this tool to create new files, run git commands, use curl, or anything else that isn't editing an existing file's contents. This is a minimal Alpine Linux environment, so a tool you expect (git, curl, etc.) might not be installed yet. Check first with e.g. 'which git curl' and if something's missing, install it with 'apk add <package>' (Alpine Package Keeper). The container is persistent, so anything you install stays around for next time.",
   parameters: {
     type: Type.OBJECT,
     properties: {
-      command: { 
-        type: Type.STRING, 
-        description: "The full bash command string to execute (e.g. 'ls -la', 'npm test', 'cat file.txt | grep foo')." 
+      command: {
+        type: Type.STRING,
+        description: "The full bash command string to execute (e.g. 'ls -la', 'npm test', 'cat file.txt | grep foo')."
       }
     },
     required: ["command"],
+  },
+};
+const editFileDeclaration = {
+  name: "edit_file",
+  description: "Edit an existing file on your computer by applying one or more find-and-replace diffs, given as a JSON array. Each diff's 'old_string' must match the file's exact current content (including whitespace/indentation) and must be unique in the file unless 'replace_all' is set. This tool only edits files that already exist. It cannot create new files, use 'execute_command' for that (e.g. 'cat > file.txt <<EOF'). Read the file first with 'read_file' or 'execute_command' if you aren't sure of its exact current content.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      path: {
+        type: Type.STRING,
+        description: "The file path on your computer (e.g. 'src/index.js'). Relative paths are resolved against /workspace."
+      },
+      edits: {
+        type: Type.ARRAY,
+        description: "An ordered list of find-and-replace diffs to apply to the file, one after another.",
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            old_string: { type: Type.STRING, description: "The exact, unique text to find in the file, including all surrounding whitespace and indentation." },
+            new_string: { type: Type.STRING, description: "The text to replace it with." },
+            replace_all: { type: Type.BOOLEAN, description: "Replace every occurrence of 'old_string' instead of requiring it to be unique in the file. Defaults to false." }
+          },
+          required: ["old_string", "new_string"],
+        }
+      }
+    },
+    required: ["path", "edits"],
   },
 };
 const sendStdinDeclaration = {
@@ -229,6 +256,21 @@ const finishPrReviewDeclaration = {
     required: ["pull_number", "event", "body"]
   }
 };
+const createPullRequestDeclaration = {
+  name: "create_pull_request",
+  description: "Open a real pull request on GitHub from a branch you have already committed and pushed (e.g. via git in execute_command). This calls the GitHub API directly, so the result you get back is the true, authoritative outcome. Do NOT use 'gh pr create' inside execute_command to open a pull request and do NOT tell anyone a PR was submitted based on shell output alone. Always use this tool, and only report a PR as created if this tool returns status 'success'.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      title: { type: Type.STRING, description: "The pull request title." },
+      head: { type: Type.STRING, description: "The name of the branch containing your changes, already pushed to the remote (e.g. 'boxy/fix-typo')." },
+      base: { type: Type.STRING, description: "The branch you want to merge into. Defaults to the repository's default branch if omitted." },
+      body: { type: Type.STRING, description: "The pull request description." },
+      draft: { type: Type.BOOLEAN, description: "Whether to open this as a draft pull request." }
+    },
+    required: ["title", "head", "body"],
+  },
+};
 const reactCommentDeclaration = {
   name: "react_comment",
   description: "React to an issue comment.",
@@ -286,7 +328,9 @@ export const boxyWebhookTools = [
   saveTodoListItemDeclaration,
   reactCommentDeclaration,
   executeCommandDeclaration,
-  sendStdinDeclaration,   
+  editFileDeclaration,
+  createPullRequestDeclaration,
+  sendStdinDeclaration,
   waitCommandDeclaration,
   killCommandDeclaration
 ];
@@ -303,6 +347,8 @@ export const boxyBackgroundTools = [
   completeTodoListItemDeclaration,
   createCommentDeclaration,
   executeCommandDeclaration,
+  editFileDeclaration,
+  createPullRequestDeclaration,
   sendStdinDeclaration,
   waitCommandDeclaration,
   killCommandDeclaration
@@ -431,8 +477,7 @@ export async function executeTool(call, context, app, activityLog) {
     }
     else if (call.name === "label_issue") {
       const label = call.args.label;
-      await labelIssue(context, label);
-      toolResult = { status: "success", message: `Label '${label}' added to the issue.` };
+      toolResult = await labelIssue(context, label);
     }
     else if (call.name === "close_or_open_issue") {
       const state = call.args.state;
@@ -441,12 +486,18 @@ export async function executeTool(call, context, app, activityLog) {
     }
     else if (call.name === "save_todo_list_item") {
       const { title, description } = call.args;
+     try {
       await createTodoListItem(title, description, {
         sourceRepoOwner: context.repo().owner,
         sourceRepoName: context.repo().repo,
         sourceIssueNumber: context.payload.issue?.number || context.payload.pull_request?.number || null,
         sourceInstallationId: context.payload.installation?.id || null
       });
+     } catch (e) {
+      console.error(e);
+      toolResult = { status: "error", message: e.message };
+      return;
+     }
       toolResult = { status: "success", message: `To-do item '${title}' added.` };
     }
 
@@ -556,6 +607,39 @@ export async function executeTool(call, context, app, activityLog) {
       app.log
     );
     }
+    else if (call.name === "edit_file") {
+      app.log.info(`Boxy editing file: ${call.args.path}`);
+      toolResult = await editFileInBoxyContainer(call.args.path, call.args.edits);
+      app.log.info(`Boxy edit_file result: ${JSON.stringify(toolResult)}`);
+    }
+    else if (call.name === "create_pull_request") {
+      const { title, head, body, draft } = call.args;
+      let base = call.args.base;
+      if (!base) {
+        const { data: repoData } = await context.octokit.rest.repos.get({ owner, repo });
+        base = repoData.default_branch;
+      }
+
+      try {
+        const { data } = await context.octokit.rest.pulls.create({
+          owner, repo, title, head, base, body, draft: !!draft
+        });
+        app.log.info(`Boxy opened PR #${data.number} on ${owner}/${repo}: ${data.html_url}`);
+        toolResult = {
+          status: "success",
+          pull_request_number: data.number,
+          pull_request_url: data.html_url,
+          message: `Pull request #${data.number} was actually created on GitHub: ${data.html_url}. This is confirmed by the GitHub API, not a guess.`
+        };
+      } catch (err) {
+        const apiErrors = err.response?.data?.errors ? JSON.stringify(err.response.data.errors) : null;
+        app.log.warn(`Boxy failed to create PR on ${owner}/${repo} (head=${head}, base=${base}): ${err.message}`);
+        toolResult = {
+          status: "failed",
+          error: `GitHub rejected this pull request (head='${head}', base='${base}' on ${owner}/${repo}): ${err.message}${apiErrors ? " - " + apiErrors : ""}. The PR was NOT created. Do not tell anyone it was submitted. Common causes: the branch wasn't actually pushed to this repo, there are no commits between base and head, or a PR already exists for this branch.`
+        };
+      }
+    }
     else if (call.name === "send_stdin") {
       app.log.info(`Boxy sending stdin: ${call.args.text}`);
       toolResult = await sendStdinToBoxyContainer(call.args.text);
@@ -596,9 +680,10 @@ export async function executeTool(call, context, app, activityLog) {
         }
         reviews[prKey].draft_comments.push(commentObj);
         await saveReviews(reviews);
+        toolResult = { status: "success", message: "Inline comment drafted. It will be posted when finish_pr_review is called." };
+      } else {
+        toolResult = { error: `No active review found for PR #${prKey}. The comment was NOT drafted or saved, so do not tell anyone it was. Double check 'pull_number' matches the PR you are actually reviewing.` };
       }
-
-      toolResult = { status: "success", message: "Inline comment drafted. It will be posted when finish_pr_review is called." };
     }
     else if (call.name === "finish_pr_review") {
       const reviews = await loadReviews();
