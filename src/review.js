@@ -1,7 +1,7 @@
 import AdmZip from 'adm-zip';
 import { callAIWithFallback } from './ai.js';
 import { loadReviews, saveReviews, loadNotebook, loadTodoList, loadStickyNotes } from './fs.js';
-import { boxyReviewTools, executeTool, boxyWebhookTools } from './tools.js';
+import { boxyReviewTools, executeTool, boxyWebhookTools, formatActivityLog } from './tools.js';
 
 export async function triggerCodeReview(context, app) {
   let pr;
@@ -217,6 +217,7 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
   let conversationTurns = [{ role: "user", parts: [{ text: systemPrompt }] }];
   let response = await callAIWithFallback({ contents: conversationTurns, tools: boxyReviewTools, appLog: app.log, needsBigBrain: true });
   let loopCount = 0;
+  const activityLog = [];
   while (loopCount < 65) {
     if (!response.functionCalls || response.functionCalls.length === 0) {
       const currState = await loadReviews();
@@ -228,7 +229,12 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
       } else break;
     }
     const call = response.functionCalls[0];
-    const toolResult = await executeTool(call, context, app);
+
+    if (call.name === "update_pr_summary" && call.args?.body) {
+      call.args.body += formatActivityLog(activityLog);
+    }
+
+    const toolResult = await executeTool(call, context, app, activityLog);
     conversationTurns.push(response.candidates[0].content);
     conversationTurns.push({ role: "user", parts: [{ functionResponse: { name: call.name, response: toolResult, id: call.id } }] });
     response = await callAIWithFallback({ contents: conversationTurns, tools: boxyReviewTools, appLog: app.log, needsBigBrain: true });
@@ -408,13 +414,14 @@ export async function handleReviewCommentReply(context, app) {
     app.log.info(response.text);
     let loopCount = 0;
     const MAX_LOOPS = 9;
+    const activityLog = [];
 
     while (response.functionCalls && response.functionCalls.length > 0 && loopCount < MAX_LOOPS) {
       loopCount++;
       const call = response.functionCalls[0];
       app.log.info(`Boxy requested tool: ${call.name} with args:`, call.args);
 
-      const toolResult = await executeTool(call, context, app);
+      const toolResult = await executeTool(call, context, app, activityLog);
 
       conversationTurns.push(response.candidates[0].content);
       conversationTurns.push({
@@ -436,7 +443,7 @@ export async function handleReviewCommentReply(context, app) {
     }
 
     app.log.info(response.text);
-    return await postReply(response.text);
+    return await postReply(response.text + formatActivityLog(activityLog));
 
   } catch (error) {
     app.log.error("ERROR inside review comment reply block:", error);

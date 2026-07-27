@@ -2,7 +2,8 @@ import { Type } from "@google/genai";
 import { labelIssue, issueCloseOrOpen } from "./index.js";
 import { loadNotebook, saveMemoryToFile, saveStickyNoteToFile, createTodoListItem, loadTodoList, saveTodoList, loadReviews, saveReviews } from "./fs.js";
 import { runCommandInBoxyContainer, sendStdinToBoxyContainer, waitCommandInBoxyContainer, killCommandInBoxyContainer } from "./container.js";
- 
+import { executeSafely, redactSecrets } from "./safety_filter.js";
+
 
 const readMemoryDeclaration = {
   name: "read_memory",
@@ -306,7 +307,30 @@ export const boxyBackgroundTools = [
   waitCommandDeclaration,
   killCommandDeclaration
 ];
-export async function executeTool(call, context, app) {
+function sanitizeForLog(value) {
+  try {
+    const json = JSON.stringify(value === undefined ? {} : value, null, 2);
+    return redactSecrets(json || "{}");
+  } catch {
+    return "[unserializable]";
+  }
+}
+
+/**
+ * Renders a collapsible <details> block listing every tool Boxy used,
+ * with its (redacted) params and output, for inclusion in a GitHub comment.
+ */
+export function formatActivityLog(activityLog) {
+  if (!activityLog || activityLog.length === 0) return "";
+
+  const entries = activityLog.map((entry, i) =>
+    `**${i + 1}. \`${entry.tool}\`**\n\nParams:\n\`\`\`json\n${entry.params}\n\`\`\`\n\nOutput:\n\`\`\`json\n${entry.output}\n\`\`\``
+  ).join("\n\n---\n\n");
+
+  return `\n\n<details>\n<summary>🔧 My tool activity log (${activityLog.length} call${activityLog.length === 1 ? "" : "s"})</summary>\n\n${entries}\n\n</details>`;
+}
+
+export async function executeTool(call, context, app, activityLog) {
   let toolResult = {};
   const { owner, repo } = context.repo();
 
@@ -525,9 +549,12 @@ export async function executeTool(call, context, app) {
 
     }
 
-    app.log.info(`Boxy ran command: ${call.args.command}`);
-    toolResult = await runCommandInBoxyContainer(call.args.command, isBoxyWebhook, token);
-    app.log.info(`Boxy command result: ${JSON.stringify(toolResult)}`);
+    // Safety filter: blocks high-risk commands and redacts secrets from logs/output.
+    toolResult = await executeSafely(
+      call.args.command,
+      (command) => runCommandInBoxyContainer(command, isBoxyWebhook, token),
+      app.log
+    );
     }
     else if (call.name === "send_stdin") {
       app.log.info(`Boxy sending stdin: ${call.args.text}`);
@@ -616,5 +643,14 @@ export async function executeTool(call, context, app) {
     if (app) app.log.warn(`Tool ${call.name} failed: ${err.message}`);
     toolResult = { error: `Action failed: ${err.message}. If you have called this tool more than once, stop trying the same thing.` };
   }
+
+  if (Array.isArray(activityLog)) {
+    activityLog.push({
+      tool: call.name,
+      params: sanitizeForLog(call.args),
+      output: sanitizeForLog(toolResult),
+    });
+  }
+
   return toolResult;
 }

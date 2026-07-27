@@ -1,4 +1,4 @@
-import { checkCommandSafety, redactSecrets, executeSafely } from "./safety_filter.js";
+import { checkCommandSafety, redactSecrets, executeSafely } from "../src/safety_filter.js";
 import assert from "assert";
 
 console.log("Running Boxy Command Safety Filter Unit Tests...");
