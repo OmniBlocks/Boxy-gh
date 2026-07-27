@@ -1,7 +1,7 @@
 import { Type } from "@google/genai";
 import { labelIssue, issueCloseOrOpen } from "./index.js";
 import { loadNotebook, saveMemoryToFile, saveStickyNoteToFile, createTodoListItem, loadTodoList, saveTodoList, loadReviews, saveReviews } from "./fs.js";
-import { runCommandInBoxyContainer, sendStdinToBoxyContainer, waitCommandInBoxyContainer, killCommandInBoxyContainer } from "./container.js";
+import { runCommandInBoxyContainer, sendStdinToBoxyContainer, waitCommandInBoxyContainer, killCommandInBoxyContainer, editFileInBoxyContainer } from "./container.js";
  
 
 const readMemoryDeclaration = {
@@ -29,16 +29,43 @@ const saveMemoryDeclaration = {
 };
 const executeCommandDeclaration = {
   name: "execute_command",
-  description: "Execute a bash shell command in your computer.",
+  description: "Execute a bash shell command in your computer. To edit an existing file, prefer the 'edit_file' tool instead of shell tricks like sed/cat/heredocs - it's far less error-prone. Still use this tool to create new files, run git commands, or anything else that isn't editing an existing file's contents.",
   parameters: {
     type: Type.OBJECT,
     properties: {
-      command: { 
-        type: Type.STRING, 
-        description: "The full bash command string to execute (e.g. 'ls -la', 'npm test', 'cat file.txt | grep foo')." 
+      command: {
+        type: Type.STRING,
+        description: "The full bash command string to execute (e.g. 'ls -la', 'npm test', 'cat file.txt | grep foo')."
       }
     },
     required: ["command"],
+  },
+};
+const editFileDeclaration = {
+  name: "edit_file",
+  description: "Edit an existing file on your computer by applying one or more find-and-replace diffs, given as a JSON array. Each diff's 'old_string' must match the file's exact current content (including whitespace/indentation) and must be unique in the file unless 'replace_all' is set. This tool only edits files that already exist. It cannot create new files, use 'execute_command' for that (e.g. 'cat > file.txt <<EOF'). Read the file first with 'read_file' or 'execute_command' if you aren't sure of its exact current content.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      path: {
+        type: Type.STRING,
+        description: "The file path on your computer (e.g. 'src/index.js'). Relative paths are resolved against /workspace."
+      },
+      edits: {
+        type: Type.ARRAY,
+        description: "An ordered list of find-and-replace diffs to apply to the file, one after another.",
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            old_string: { type: Type.STRING, description: "The exact, unique text to find in the file, including all surrounding whitespace and indentation." },
+            new_string: { type: Type.STRING, description: "The text to replace it with." },
+            replace_all: { type: Type.BOOLEAN, description: "Replace every occurrence of 'old_string' instead of requiring it to be unique in the file. Defaults to false." }
+          },
+          required: ["old_string", "new_string"],
+        }
+      }
+    },
+    required: ["path", "edits"],
   },
 };
 const sendStdinDeclaration = {
@@ -300,6 +327,7 @@ export const boxyWebhookTools = [
   saveTodoListItemDeclaration,
   reactCommentDeclaration,
   executeCommandDeclaration,
+  editFileDeclaration,
   createPullRequestDeclaration,
   sendStdinDeclaration,
   waitCommandDeclaration,
@@ -318,6 +346,7 @@ export const boxyBackgroundTools = [
   completeTodoListItemDeclaration,
   createCommentDeclaration,
   executeCommandDeclaration,
+  editFileDeclaration,
   createPullRequestDeclaration,
   sendStdinDeclaration,
   waitCommandDeclaration,
@@ -545,6 +574,11 @@ export async function executeTool(call, context, app) {
     app.log.info(`Boxy ran command: ${call.args.command}`);
     toolResult = await runCommandInBoxyContainer(call.args.command, isBoxyWebhook, token);
     app.log.info(`Boxy command result: ${JSON.stringify(toolResult)}`);
+    }
+    else if (call.name === "edit_file") {
+      app.log.info(`Boxy editing file: ${call.args.path}`);
+      toolResult = await editFileInBoxyContainer(call.args.path, call.args.edits);
+      app.log.info(`Boxy edit_file result: ${JSON.stringify(toolResult)}`);
     }
     else if (call.name === "create_pull_request") {
       const { title, head, body, draft } = call.args;

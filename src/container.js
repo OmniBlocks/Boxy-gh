@@ -252,6 +252,90 @@ export async function killCommandInBoxyContainer() {
   }
 }
 
+function runDockerExec(args, input) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("docker", args);
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (data) => { stdout += data.toString(); });
+    child.stderr.on("data", (data) => { stderr += data.toString(); });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(stderr.trim() || `docker exec exited with code ${code}`));
+      } else {
+        resolve(stdout);
+      }
+    });
+
+    if (input !== undefined) child.stdin.write(input);
+    child.stdin.end();
+  });
+}
+
+function resolveWorkspacePath(filePath) {
+  return filePath.startsWith("/") ? filePath : `/workspace/${filePath}`;
+}
+
+export async function editFileInBoxyContainer(filePath, edits) {
+  if (activeTask) {
+    return { error: "The computer is currently busy running another command. Use 'wait_command' or 'kill_command' before editing files." };
+  }
+  if (typeof filePath !== "string" || !filePath) {
+    return { error: "No file path was provided." };
+  }
+  if (!Array.isArray(edits) || edits.length === 0) {
+    return { error: "No edits were provided." };
+  }
+
+  await ensureContainerRunning();
+  const target = resolveWorkspacePath(filePath);
+
+  let content;
+  try {
+    content = await runDockerExec(["exec", CONTAINER_NAME, "cat", target]);
+  } catch (err) {
+    return { error: `Could not read '${target}': ${err.message}. This tool only edits files that already exist. Use execute_command to create new files.` };
+  }
+
+  let updated = content;
+  for (let i = 0; i < edits.length; i++) {
+    const { old_string, new_string, replace_all } = edits[i] || {};
+    if (typeof old_string !== "string" || typeof new_string !== "string") {
+      return { error: `Edit #${i + 1} is missing 'old_string' or 'new_string'. No changes were written.` };
+    }
+    if (old_string === new_string) {
+      return { error: `Edit #${i + 1} has an identical 'old_string' and 'new_string', so it would do nothing. No changes were written.` };
+    }
+    const occurrences = updated.split(old_string).length - 1;
+    if (occurrences === 0) {
+      return { error: `Edit #${i + 1}: 'old_string' was not found in '${target}'. No changes were written. Re-read the file to confirm its exact current content, including whitespace.` };
+    }
+    if (occurrences > 1 && !replace_all) {
+      return { error: `Edit #${i + 1}: 'old_string' matches ${occurrences} locations in '${target}', but must be unique. Add more surrounding context to 'old_string', or set 'replace_all: true' to replace every occurrence. No changes were written.` };
+    }
+    updated = replace_all ? updated.split(old_string).join(new_string) : updated.replace(old_string, new_string);
+  }
+
+  if (updated === content) {
+    return { error: "No changes were made to the file." };
+  }
+
+  try {
+    await runDockerExec(["exec", "-i", CONTAINER_NAME, "dd", `of=${target}`], updated);
+  } catch (err) {
+    return { error: `Failed to write '${target}': ${err.message}` };
+  }
+
+  return {
+    status: "success",
+    path: target,
+    edits_applied: edits.length,
+    message: `Applied ${edits.length} edit(s) to '${target}'.`
+  };
+}
+
 export async function getBoxyCwd() {
   const result = await runCommandInBoxyContainer("pwd", false);
   return result.status === "completed" ? result.stdout.trim() : "/workspace";
