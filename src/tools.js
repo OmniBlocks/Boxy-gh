@@ -472,6 +472,7 @@ export async function executeTool(call, context, app) {
      } catch (e) {
       console.error(e);
       toolResult = { status: "error", message: e.message };
+      return;
      }
       toolResult = { status: "success", message: `To-do item '${title}' added.` };
     }
