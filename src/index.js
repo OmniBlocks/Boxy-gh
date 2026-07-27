@@ -3,7 +3,7 @@ import { EventEmitter } from "events";
 import fs from "fs/promises";
 import { loadNotebook, loadTodoList, loadReviews, loadStickyNotes, REVERT_FILE } from "./fs.js";
 import { callAIWithFallback } from "./ai.js";
-import { executeTool, boxyWebhookTools, boxyBackgroundTools } from "./tools.js";
+import { executeTool, boxyWebhookTools, boxyBackgroundTools, formatActivityLog } from "./tools.js";
 import { triggerCodeReview, handleWorkflowCompleted, handleReviewCommentReply } from './review.js';
 const workflowEvents = new EventEmitter();
 
@@ -247,6 +247,7 @@ async function startBackgroundQueue(app) {
             contents: conversationTurns, tools: boxyBackgroundTools, appLog: app.log
           });
 
+          const activityLog = [];
           let loopCount = 0;
           while (loopCount < 60) {
             // If the model tried to just talk using text instead of calling a tool
@@ -281,9 +282,13 @@ async function startBackgroundQueue(app) {
 
             loopCount++;
             const call = response.functionCalls[0];
-            
-            const toolResult = await executeTool(call, bgContext, app);
-            
+
+            if (call.name === "create_comment" && call.args?.body) {
+              call.args.body += formatActivityLog(activityLog);
+            }
+
+            const toolResult = await executeTool(call, bgContext, app, activityLog);
+
             conversationTurns.push(response.candidates[0].content);
             conversationTurns.push({
               role: "user",
@@ -524,14 +529,15 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
 
       let loopCount = 0;
       const MAX_LOOPS = 10;
+      const activityLog = [];
       app.log.info(conversationTurns);
       while (response.functionCalls && response.functionCalls.length > 0 && loopCount < MAX_LOOPS) {
         loopCount++;
         const call = response.functionCalls[0];
         app.log.info(`Boxy requested tool: ${call.name} with args:`, call.args);
 
-        const toolResult = await executeTool(call, context, app);
- 
+        const toolResult = await executeTool(call, context, app, activityLog);
+
         conversationTurns.push(response.candidates[0].content);
         
         if (loopCount == 8) {
@@ -574,7 +580,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         const finishReason = response.candidates?.[0]?.finishReason || "UNKNOWN_REASON";
         throw new Error(`Boxy broke reason: ${finishReason}\n Full API Response: ${JSON.stringify(response)}\n\n`);
       }
-      let responseText = response.text;
+      let responseText = response.text + formatActivityLog(activityLog);
       app.log.info(response.text);
 
       const repo = context.repo();
