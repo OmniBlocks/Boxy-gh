@@ -430,6 +430,18 @@ export async function handleReviewCommentReply(context, app) {
       });
     }
 
+    if (!response.text && response.functionCalls && response.functionCalls.length > 0) {
+      conversationTurns.push(response.candidates[0].content);
+      conversationTurns.push({
+        role: "user",
+        parts: [{ text: "(system) You've hit the tool call limit for this turn and cannot make any more tool calls right now. Wrap up with a final text reply summarizing what you did and what's left (use the to-do list if there's more to do)." }]
+      });
+      response = await callAIWithFallback({
+        contents: conversationTurns,
+        appLog: app.log
+      });
+    }
+
     if (!response.text) {
       const finishReason = response.candidates?.[0]?.finishReason || "UNKNOWN_REASON";
       throw new Error(`Boxy broke reason: ${finishReason}\n Full API Response: ${JSON.stringify(response)}\n\n`);
