@@ -275,7 +275,11 @@ function runDockerExec(args, input) {
 }
 
 function resolveWorkspacePath(filePath) {
-  return filePath.startsWith("/") ? filePath : `/workspace/${filePath}`;
+  const resolved = path.resolve("/workspace", filePath);
+  if (!resolved.startsWith("/workspace")) {
+    throw new Error("Access denied: path is outside /workspace");
+  }
+  return resolved;
 }
 
 export async function editFileInBoxyContainer(filePath, edits) {
