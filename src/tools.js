@@ -462,12 +462,17 @@ export async function executeTool(call, context, app) {
     }
     else if (call.name === "save_todo_list_item") {
       const { title, description } = call.args;
+     try {
       await createTodoListItem(title, description, {
         sourceRepoOwner: context.repo().owner,
         sourceRepoName: context.repo().repo,
         sourceIssueNumber: context.payload.issue?.number || context.payload.pull_request?.number || null,
         sourceInstallationId: context.payload.installation?.id || null
       });
+     } catch (e) {
+      console.error(e);
+      toolResult = { status: "error", message: e.message };
+     }
       toolResult = { status: "success", message: `To-do item '${title}' added.` };
     }
 
