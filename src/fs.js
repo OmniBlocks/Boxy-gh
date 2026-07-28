@@ -16,7 +16,7 @@ export async function loadReviews() {
 export async function saveReviews(reviews) {
   await fs.writeFile(REVIEWS_FILE, JSON.stringify(reviews, null, 2), "utf-8");
 }
-export async function loadNotebook() {
+async function loadAllNotebooks() {
   try {
     const data = await fs.readFile(NOTEBOOK_FILE, "utf-8");
     return JSON.parse(data);
@@ -28,12 +28,18 @@ export async function loadNotebook() {
     throw err;
   }
 }
-export async function saveMemoryToFile(title, content) {
-  const notebook = await loadNotebook();
-  notebook[title] = content;
-  await fs.writeFile(NOTEBOOK_FILE, JSON.stringify(notebook, null, 2), "utf-8");
+// repoKey scopes memories to the repo they were saved from
+export async function loadNotebook(repoKey) {
+  const allNotebooks = await loadAllNotebooks();
+  return allNotebooks[repoKey] || {};
 }
-export async function loadStickyNotes() {
+export async function saveMemoryToFile(repoKey, title, content) {
+  const allNotebooks = await loadAllNotebooks();
+  allNotebooks[repoKey] = allNotebooks[repoKey] || {};
+  allNotebooks[repoKey][title] = content;
+  await fs.writeFile(NOTEBOOK_FILE, JSON.stringify(allNotebooks, null, 2), "utf-8");
+}
+async function loadAllStickyNotes() {
   try {
     const data = await fs.readFile(STICKY_NOTES_FILE, "utf-8");
     return JSON.parse(data);
@@ -45,8 +51,14 @@ export async function loadStickyNotes() {
     throw err;
   }
 }
-export async function saveStickyNoteToFile(title, content) {
-  const stickyNotes = await loadStickyNotes();
+
+export async function loadStickyNotes(repoKey) {
+  const allStickyNotes = await loadAllStickyNotes();
+  return allStickyNotes[repoKey] || {};
+}
+export async function saveStickyNoteToFile(repoKey, title, content) {
+  const allStickyNotes = await loadAllStickyNotes();
+  const stickyNotes = allStickyNotes[repoKey] || {};
 
   stickyNotes[title] = {
     content: content,
@@ -62,7 +74,8 @@ export async function saveStickyNoteToFile(title, content) {
     limitedStickyNotes[sortedKeys[i]] = stickyNotes[sortedKeys[i]];
   }
 
-  await fs.writeFile(STICKY_NOTES_FILE, JSON.stringify(limitedStickyNotes, null, 2), "utf-8");
+  allStickyNotes[repoKey] = limitedStickyNotes;
+  await fs.writeFile(STICKY_NOTES_FILE, JSON.stringify(allStickyNotes, null, 2), "utf-8");
 }
 export async function createTodoListItem(title, description, metadata = {}) {
   const todoList = await loadTodoList() || {};

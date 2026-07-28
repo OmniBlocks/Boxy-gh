@@ -379,20 +379,21 @@ export function formatActivityLog(activityLog) {
 export async function executeTool(call, context, app, activityLog) {
   let toolResult = {};
   const { owner, repo } = context.repo();
+  const repoKey = `${owner}/${repo}`;
 
   try {
     if (call.name === "read_memory") {
-      const currentNotebook = await loadNotebook();
+      const currentNotebook = await loadNotebook(repoKey);
       const content = currentNotebook[call.args.title];
-      toolResult = content ? { content } : { error: `Memory '${call.args.title}' not found.` };
+      toolResult = content ? { content } : { error: `Memory '${call.args.title}' not found in this repo's notebook.` };
     }
     else if (call.name === "save_memory") {
-      await saveMemoryToFile(call.args.title, call.args.content);
+      await saveMemoryToFile(repoKey, call.args.title, call.args.content);
       toolResult = { status: "success", message: `Saved '${call.args.title}'!` };
     }
     else if (call.name === "save_sticky_note") {
       const { title, content } = call.args;
-      await saveStickyNoteToFile(title, content);
+      await saveStickyNoteToFile(repoKey, title, content);
       toolResult = { status: "success", message: `Sticky note '${title}' successfully saved.` };
     }
     else if (call.name === "search_code") {
