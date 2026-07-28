@@ -405,7 +405,7 @@ export async function handleReviewCommentReply(context, app) {
         ${todoListItems}
       - PR reviews you are currently working on:
         ${reviewingList}
-      - Code Search: If asked about code, use 'search_code' to find file paths, then use 'read_file' on those paths to read the actual code! Note: Only use 'search_code' if you don't know the exact file path. If you already know the file path, use 'read_file' directly. NEVER use 'search_code' when the path is already provided.
+      - Code Search: If asked about code, use 'search_code' to find file paths, then use 'read_file' on those paths to read the actual code! Note: Only use 'search_code' if you don't know the exact file path. If you already know the file path, use 'read_file' directly. NEVER use 'search_code' when the path is already provided. This is not optional: if a question is about how THIS repo's code actually works, is structured, or should be changed, you MUST read the real file content BEFORE answering. Never answer from generic assumptions about what the code "probably" looks like and present it as specific to this repo. The PR diff above only shows the changed lines, not the whole file, so read the actual file if you need more context.
       - Read issues/prs: If asked about another issue or PR, use 'read_issue_or_pr' with the issue number.
       - Label issues: If you need to label the current issue, use 'label_issue'.
 
