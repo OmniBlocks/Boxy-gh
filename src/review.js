@@ -1,7 +1,7 @@
 import AdmZip from 'adm-zip';
 import { callAIWithFallback } from './ai.js';
 import { loadReviews, saveReviews, loadNotebook, loadTodoList, loadStickyNotes } from './fs.js';
-import { boxyReviewTools, executeTool, boxyWebhookTools, formatActivityLog } from './tools.js';
+import { boxyReviewTools, executeTool, boxyWebhookTools, prependActivityLog } from './tools.js';
 
 export async function triggerCodeReview(context, app) {
   let pr;
@@ -233,7 +233,7 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
     const call = response.functionCalls[0];
 
     if (call.name === "update_pr_summary" && call.args?.body) {
-      call.args.body = formatActivityLog(activityLog).trim() + "\n\n" + call.args.body;
+      call.args.body = prependActivityLog(call.args.body, activityLog);
     }
 
     const toolResult = await executeTool(call, context, app, activityLog);
@@ -465,7 +465,7 @@ export async function handleReviewCommentReply(context, app) {
     }
 
     app.log.info(response.text);
-    return await postReply(response.text + formatActivityLog(activityLog));
+    return await postReply(prependActivityLog(response.text, activityLog));
 
   } catch (error) {
     app.log.error("ERROR inside review comment reply block:", error);

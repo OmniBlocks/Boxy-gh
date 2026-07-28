@@ -3,7 +3,7 @@ import { EventEmitter } from "events";
 import fs from "fs/promises";
 import { loadNotebook, loadTodoList, loadReviews, loadStickyNotes, REVERT_FILE } from "./fs.js";
 import { callAIWithFallback } from "./ai.js";
-import { executeTool, boxyWebhookTools, boxyBackgroundTools, formatActivityLog } from "./tools.js";
+import { executeTool, boxyWebhookTools, boxyBackgroundTools, prependActivityLog } from "./tools.js";
 import { triggerCodeReview, handleWorkflowCompleted, handleReviewCommentReply } from './review.js';
 const workflowEvents = new EventEmitter();
 
@@ -282,7 +282,7 @@ async function startBackgroundQueue(app) {
             const call = response.functionCalls[0];
 
             if (call.name === "create_comment" && call.args?.body) {
-              call.args.body += formatActivityLog(activityLog);
+              call.args.body = prependActivityLog(call.args.body, activityLog);
             }
 
             const toolResult = await executeTool(call, bgContext, app, activityLog);
@@ -589,7 +589,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         const finishReason = response.candidates?.[0]?.finishReason || "UNKNOWN_REASON";
         throw new Error(`Boxy broke reason: ${finishReason}\n Full API Response: ${JSON.stringify(response)}\n\n`);
       }
-      let responseText = response.text + formatActivityLog(activityLog);
+      let responseText = prependActivityLog(response.text, activityLog);
       app.log.info(response.text);
 
       const repo = context.repo();

@@ -376,6 +376,14 @@ export function formatActivityLog(activityLog) {
   return `\n\n<details>\n<summary>🔧 My tool activity log (${activityLog.length} call${activityLog.length === 1 ? "" : "s"})</summary>\n\n${entries}\n\n</details>`;
 }
 
+/**
+ * Puts the tool activity log at the top of the comment body
+ */
+export function prependActivityLog(body, activityLog) {
+  const log = formatActivityLog(activityLog);
+  return log ? log.trim() + "\n\n" + body : body;
+}
+
 export async function executeTool(call, context, app, activityLog) {
   let toolResult = {};
   const { owner, repo } = context.repo();
