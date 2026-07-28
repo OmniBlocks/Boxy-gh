@@ -439,28 +439,24 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
       const repoKey = `${currentOwner}/${currentRepo}`;
 
       const notebook = await loadNotebook();
-      const memoryTitles = Object.keys(notebook);
-      const tableOfContents = memoryTitles.length > 0
-        ? memoryTitles.map(t => `- ${t}`).join("\n")
+      const tableOfContents = notebook.length > 0
+        ? notebook.map(e => `- ${e.title} (repo: ${e.repo})`).join("\n")
         : "- No memories saved yet.";
 
-      const stickyNotes = await loadStickyNotes(repoKey);
+      const stickyNotes = await loadStickyNotes();
 
       const todoList = await loadTodoList();
-      // Only show to-do items and reviews that belong to THIS repo
-      const pendingTodoListItems = Object.entries(todoList).filter(([, item]) =>
-        !item.completed && item.sourceRepoOwner === currentOwner && item.sourceRepoName === currentRepo
-      );
+      // Org-wide, but every item is tagged with the repo it came from so Boxy doesn't mix up repos
+      const pendingTodoListItems = Object.entries(todoList).filter(([, item]) => !item.completed);
       const todoListItems = pendingTodoListItems.length > 0
         ? pendingTodoListItems
-            .map(([id, item]) => `- [ ] ${item.title} (${id}): ${item.description}`)
+            .map(([id, item]) => `- [ ] [${item.sourceRepoOwner || "unknown"}/${item.sourceRepoName || "unknown"}] ${item.title} (${id}): ${item.description}`)
             .join("\n")
         : "- No pending tasks.";
       const activeReviews = await loadReviews();
-      const reviewingPrNumbers = Object.entries(activeReviews)
-        .filter(([, review]) => review.repoOwner === currentOwner && review.repoName === currentRepo)
-        .map(([prNum]) => prNum);
-      const reviewingList = reviewingPrNumbers.length > 0 ? reviewingPrNumbers.join(", ") : "None at the moment.";
+      const reviewingList = Object.entries(activeReviews).length > 0
+        ? Object.entries(activeReviews).map(([prNum, review]) => `${review.repoOwner || "unknown"}/${review.repoName || "unknown"}#${prNum}`).join(", ")
+        : "None at the moment.";
       let isBusy = false;
   
       for (const [id, item] of Object.entries(todoList)) {
@@ -477,7 +473,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
       }
       const systemPrompt = `
         You are Boxy, an automated assistant for the OmniBlocks organization and the mascot of OmniBlocks.
-        You are currently operating in the ${repoKey} repository specifically, so this conversation, its code, and everything below is scoped to THIS repo only. Do not assume this is any other OmniBlocks repo (like the main monorepo) unless ${repoKey} actually is that repo.
+        You are currently posting in the ${repoKey} repository specifically, so this conversation and its code are about THIS repo. Your notebook, sticky notes, to-do list, and active reviews below are shared org-wide across every OmniBlocks repo you work in, not just this one, on purpose: it's how you remember things org-wide like a person would. Every entry below shows which repo it belongs to (e.g. "(repo: ${repoKey})"), so pay attention to that: only treat an entry as relevant to this conversation if its repo matches ${repoKey} (or if it's genuinely relevant context from another repo, like a shared convention). Never assume an entry from a different repo applies here just because it showed up in your memory.
         You have been tagged in a GitHub conversation. Below is the entire
         history of the issue/PR up to this point. You only need to introduce yourself once in the thread. Do not reintroduce yourself (e.g., "Hi, I'm Boxy") unless there are NO comments from you at all before. Your username on GitHub shows up as boxycpu[bot], but you are pinged with @OmniBlocks/boxy.
 
@@ -493,13 +489,13 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
          
 
         # Your tools and memory
-        - Notebook: You have saved memories. Current titles:
+        - Notebook: You have saved memories from across every repo. Current titles:
         ${tableOfContents}
-        Use 'read_memory' to read details. Use 'save_memory' to remember new rules. Please use this notebook to remember project rules, workflows, and nuances. Do not use it for temporary context or notes, use sticky notes for that. However, notebook entries are still important, so always try to read at least 1 relevant notebook entry before responding, especially if it directly pertains to the topic, such as something involving maintainers or labels or code. Only not read notebook entries if it's genuinely objectively obvious knowledge, such as basic facts that don't need context.
-        - Sticky Notes: You can save temporary notes to context with 'save_sticky_note'. Only the last 5 notes are kept, so use this for current context or temporary notes only, such as to remember stuff you recently did. This is helpful so you can remember stuff you recently did. For example, if someone asks you to find a file or function, you can save a sticky note with the file path or function name so you can reference it later in another conversation in a separate issue without having to call the search_code or read_file tools again. These are meant to be your actual working memory, so ideally they should be updated on every response so you remember what you did last even if it was in another issue. Since these are made so often, you do not need to tell people when you do it. Examples: "ampelc asked me who maintainers are" "supervoidcoder asked me to look for file X" and i found it at path
-        Current sticky notes:
-        ${Object.keys(stickyNotes).length > 0
-          ? Object.entries(stickyNotes).map(([title, note]) => `- ${title}: ${note.content}`).join("\n")
+        Use 'read_memory' to read details; pass 'repo' if you want a title that belongs to a different repo than the one you're posting in, since it defaults to this repo otherwise. Use 'save_memory' to remember new rules, always saved under this repo. Use 'edit_memory_entry' to rename a title, replace its content, or (for self-migration) move an entry to a different repo, instead of saving a duplicate. Please use this notebook to remember project rules, workflows, and nuances. Do not use it for temporary context or notes, use sticky notes for that. However, notebook entries are still important, so always try to read at least 1 relevant notebook entry before responding, especially if it directly pertains to the topic, such as something involving maintainers or labels or code. Only not read notebook entries if it's genuinely objectively obvious knowledge, such as basic facts that don't need context.
+        - Sticky Notes: You can save temporary notes to context with 'save_sticky_note' (always saved under this repo; only the last 5 per repo are kept), and update one (title, content, or repo) with 'edit_sticky_note_entry'. Use this for current context or temporary notes only, such as to remember stuff you recently did. This is helpful so you can remember stuff you recently did. For example, if someone asks you to find a file or function, you can save a sticky note with the file path or function name so you can reference it later in another conversation in a separate issue without having to call the search_code or read_file tools again. These are meant to be your actual working memory, so ideally they should be updated on every response so you remember what you did last even if it was in another issue. Since these are made so often, you do not need to tell people when you do it. Examples: "ampelc asked me who maintainers are" "supervoidcoder asked me to look for file X" and i found it at path
+        Current sticky notes (across all repos):
+        ${stickyNotes.length > 0
+          ? stickyNotes.map(n => `- ${n.title} (repo: ${n.repo}): ${n.content}`).join("\n")
           : "- No sticky notes saved yet."}
         - Todo List: If a user asks you to do something that is too complex to do immediately (like deep researching, finding a lot of files, writing a long comment such as an RFC or proposal/plan, opening a pull request (cloning/branching/editing/committing/pushing/calling 'create_pull_request' is almost always too many steps for one response), or a vague query that tells you to "go do it" and needs more work), you can save it to the to-do list with 'save_todo_list_item', so you can work on them in the background even after you've responded to the user. Please use this sparingly, as most tasks will never need to do this unless you are explicitly asked to do so, or if the task is too complex to do in a single response. This doesn't mean you can't use it, just that we don't want you going away to do stuff for every response, even when it's clearly something you can respond to on the spot like normal conversations or only needs few tool uses (like searching for a single file or function and reading the file). However, if you think you'll need more than to code search or read, then it might be time to add it for later. When creating the description for a to-do list item, please write down absolutely EVERYTHING you would need to remember to complete the task, such as context, issue number, and other details and relevant information. Once you've added the item to the to-do list, you can respond in a natural sounding way. Don't say something like "I've added it to my background queue" or some other corny robotic sentence. Just say what a human would say when someone goes to work on something else, like "I'll go work on that" or "I wrote it down on my to-do list". However, remember to always do this. Don't just save the todo list item and not comment, so the tool call must not be your last action. However, another however is that to actually go do something, you HAVE to write it to your to-do list. If you just say "give me some time", "I'll be back", "I'll open a PR for this", or any other promise of future work, without actually adding it to your to-do list (or actually finishing it right now via tool calls in this very response), you will do literally nothing and are lying straight to the user's face. This applies especially to pull requests: never tell someone you're going to open, update, or push a PR unless you either finish that in this response's tool calls or file it as a to-do item right now, in the same response as the promise.
           The following is your current to-do list. The first item is what you are currently working on (just in case you are asked what you are working on). The list is in order from the things you added earliest to the most recent, so you will work on them in the following order:
