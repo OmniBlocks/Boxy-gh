@@ -28,15 +28,42 @@ async function loadAllNotebooks() {
     throw err;
   }
 }
-// repoKey scopes memories to the repo they were saved from
-export async function loadNotebook(repoKey) {
+
+export async function loadNotebook() {
   const allNotebooks = await loadAllNotebooks();
-  return allNotebooks[repoKey] || {};
+  const entries = [];
+  for (const [repo, titles] of Object.entries(allNotebooks)) {
+    for (const [title, content] of Object.entries(titles)) {
+      entries.push({ repo, title, content });
+    }
+  }
+  return entries;
 }
 export async function saveMemoryToFile(repoKey, title, content) {
   const allNotebooks = await loadAllNotebooks();
   allNotebooks[repoKey] = allNotebooks[repoKey] || {};
   allNotebooks[repoKey][title] = content;
+  await fs.writeFile(NOTEBOOK_FILE, JSON.stringify(allNotebooks, null, 2), "utf-8");
+}
+// Updates an existing memory's title, content, and/or repo
+export async function updateMemoryEntry(repoKey, title, { newTitle, newContent, newRepo } = {}) {
+  const allNotebooks = await loadAllNotebooks();
+  const sourceNotebook = allNotebooks[repoKey];
+  if (!sourceNotebook || !Object.hasOwn(sourceNotebook, title)) {
+    throw new Error(`Memory '${title}' not found in ${repoKey}'s notebook.`);
+  }
+
+  const targetRepo = newRepo || repoKey;
+  const targetTitle = newTitle || title;
+  const content = newContent !== undefined ? newContent : sourceNotebook[title];
+
+  if ((targetRepo !== repoKey || targetTitle !== title) && Object.hasOwn(allNotebooks[targetRepo] || {}, targetTitle)) {
+    throw new Error(`A memory titled '${targetTitle}' already exists in ${targetRepo}'s notebook.`);
+  }
+
+  delete sourceNotebook[title];
+  allNotebooks[targetRepo] = allNotebooks[targetRepo] || {};
+  allNotebooks[targetRepo][targetTitle] = content;
   await fs.writeFile(NOTEBOOK_FILE, JSON.stringify(allNotebooks, null, 2), "utf-8");
 }
 async function loadAllStickyNotes() {
@@ -52,9 +79,25 @@ async function loadAllStickyNotes() {
   }
 }
 
-export async function loadStickyNotes(repoKey) {
+export async function loadStickyNotes() {
   const allStickyNotes = await loadAllStickyNotes();
-  return allStickyNotes[repoKey] || {};
+  const entries = [];
+  for (const [repo, notes] of Object.entries(allStickyNotes)) {
+    for (const [title, note] of Object.entries(notes)) {
+      entries.push({ repo, title, content: note.content, timestamp: note.timestamp });
+    }
+  }
+  return entries;
+}
+function capStickyNotes(stickyNotes) {
+  const sortedKeys = Object.keys(stickyNotes).sort((a, b) => {
+    return new Date(stickyNotes[b].timestamp) - new Date(stickyNotes[a].timestamp);
+  });
+  const limitedStickyNotes = {};
+  for (let i = 0; i < Math.min(5, sortedKeys.length); i++) {
+    limitedStickyNotes[sortedKeys[i]] = stickyNotes[sortedKeys[i]];
+  }
+  return limitedStickyNotes;
 }
 export async function saveStickyNoteToFile(repoKey, title, content) {
   const allStickyNotes = await loadAllStickyNotes();
@@ -65,16 +108,34 @@ export async function saveStickyNoteToFile(repoKey, title, content) {
     timestamp: new Date().toISOString()
   };
 
-  const sortedKeys = Object.keys(stickyNotes).sort((a, b) => {
-    return new Date(stickyNotes[b].timestamp) - new Date(stickyNotes[a].timestamp);
-  });
-
-  const limitedStickyNotes = {};
-  for (let i = 0; i < Math.min(5, sortedKeys.length); i++) {
-    limitedStickyNotes[sortedKeys[i]] = stickyNotes[sortedKeys[i]];
+  allStickyNotes[repoKey] = capStickyNotes(stickyNotes);
+  await fs.writeFile(STICKY_NOTES_FILE, JSON.stringify(allStickyNotes, null, 2), "utf-8");
+}
+// Updates an existing sticky note's title, content, and/or repo
+export async function updateStickyNoteEntry(repoKey, title, { newTitle, newContent, newRepo } = {}) {
+  const allStickyNotes = await loadAllStickyNotes();
+  const sourceNotes = allStickyNotes[repoKey];
+  if (!sourceNotes || !Object.hasOwn(sourceNotes, title)) {
+    throw new Error(`Sticky note '${title}' not found in ${repoKey}'s sticky notes.`);
   }
 
-  allStickyNotes[repoKey] = limitedStickyNotes;
+  const targetRepo = newRepo || repoKey;
+  const targetTitle = newTitle || title;
+  const existingNote = sourceNotes[title];
+
+  if ((targetRepo !== repoKey || targetTitle !== title) && Object.hasOwn(allStickyNotes[targetRepo] || {}, targetTitle)) {
+    throw new Error(`A sticky note titled '${targetTitle}' already exists in ${targetRepo}'s sticky notes.`);
+  }
+
+  delete sourceNotes[title];
+  allStickyNotes[targetRepo] = allStickyNotes[targetRepo] || {};
+  allStickyNotes[targetRepo][targetTitle] = {
+    content: newContent !== undefined ? newContent : existingNote.content,
+    timestamp: existingNote.timestamp
+  };
+  if (targetRepo !== repoKey) {
+    allStickyNotes[targetRepo] = capStickyNotes(allStickyNotes[targetRepo]);
+  }
   await fs.writeFile(STICKY_NOTES_FILE, JSON.stringify(allStickyNotes, null, 2), "utf-8");
 }
 export async function createTodoListItem(title, description, metadata = {}) {

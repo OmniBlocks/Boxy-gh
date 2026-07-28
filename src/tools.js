@@ -1,6 +1,6 @@
 import { Type } from "@google/genai";
 import { labelIssue, issueCloseOrOpen } from "./index.js";
-import { loadNotebook, saveMemoryToFile, saveStickyNoteToFile, createTodoListItem, loadTodoList, saveTodoList, loadReviews, saveReviews } from "./fs.js";
+import { loadNotebook, saveMemoryToFile, updateMemoryEntry, saveStickyNoteToFile, updateStickyNoteEntry, createTodoListItem, loadTodoList, saveTodoList, loadReviews, saveReviews } from "./fs.js";
 import { runCommandInBoxyContainer, sendStdinToBoxyContainer, waitCommandInBoxyContainer, killCommandInBoxyContainer, editFileInBoxyContainer } from "./container.js";
 import { executeSafely, redactSecrets } from "./safety_filter.js";
 
@@ -11,7 +11,8 @@ const readMemoryDeclaration = {
   parameters: {
     type: Type.OBJECT,
     properties: {
-      title: { type: Type.STRING, description: "The exact title of the memory to read." },
+      title: { type: Type.STRING, description: "The exact title of the memory to read, as shown in the notebook table of contents." },
+      repo: { type: Type.STRING, description: "The 'owner/repo' this memory belongs to, as shown next to its title in the notebook table of contents. Defaults to the repo you're currently in." },
     },
     required: ["title"],
   },
@@ -26,6 +27,21 @@ const saveMemoryDeclaration = {
       content: { type: Type.STRING, description: "The full details to remember." },
     },
     required: ["title", "content"],
+  },
+};
+const editMemoryEntryDeclaration = {
+  name: "edit_memory_entry",
+  description: "Update an existing notebook memory entry: rename its title, replace its content, and/or move it to a different repo. Use this to fix a typo, correct outdated content, or migrate an entry that's filed under the wrong repo, instead of saving a duplicate entry.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      title: { type: Type.STRING, description: "The exact current title of the memory to edit." },
+      repo: { type: Type.STRING, description: "The 'owner/repo' this memory currently belongs to. Defaults to the repo you're currently operating in if omitted." },
+      new_title: { type: Type.STRING, description: "Optional new title. Omit to keep the current title." },
+      new_content: { type: Type.STRING, description: "Optional new content, replacing the old content entirely. Omit to keep the current content." },
+      new_repo: { type: Type.STRING, description: "Optional 'owner/repo' to move this memory to, for migrating an entry that's filed under the wrong repo. Omit to keep it where it is." },
+    },
+    required: ["title"],
   },
 };
 const executeCommandDeclaration = {
@@ -108,6 +124,21 @@ const saveStickyNoteDeclaration = {
       content: { type: Type.STRING, description: "The content of the sticky note." },
     },
     required: ["title", "content"],
+  },
+};
+const editStickyNoteEntryDeclaration = {
+  name: "edit_sticky_note_entry",
+  description: "Update an existing sticky note: rename its title, replace its content, and/or move it to a different repo. Use this to correct outdated content or migrate a note that's filed under the wrong repo, instead of saving a duplicate note. Its timestamp is kept as is.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      title: { type: Type.STRING, description: "The exact current title of the sticky note to edit." },
+      repo: { type: Type.STRING, description: "The 'owner/repo' this sticky note currently belongs to. Defaults to the repo you're currently operating in if omitted." },
+      new_title: { type: Type.STRING, description: "Optional new title. Omit to keep the current title." },
+      new_content: { type: Type.STRING, description: "Optional new content, replacing the old content entirely. Omit to keep the current content." },
+      new_repo: { type: Type.STRING, description: "Optional 'owner/repo' to move this sticky note to, for migrating a note that's filed under the wrong repo. Omit to keep it where it is." },
+    },
+    required: ["title"],
   },
 };
 const saveTodoListItemDeclaration = {
@@ -302,6 +333,7 @@ const reactCommentDeclaration = {
 export const boxyReviewTools = [
   readMemoryDeclaration,
   saveMemoryDeclaration,
+  editMemoryEntryDeclaration,
   searchCodeDeclaration,
   readFileDeclaration,
   getPrDiffDeclaration,
@@ -314,15 +346,18 @@ export const boxyReviewTools = [
   killCommandDeclaration,
   reactCommentDeclaration,
   saveStickyNoteDeclaration,
+  editStickyNoteEntryDeclaration,
  closeOrOpenIssueDeclaration
 ];
 export const boxyWebhookTools = [
   readMemoryDeclaration,
   saveMemoryDeclaration,
+  editMemoryEntryDeclaration,
   searchCodeDeclaration,
   readFileDeclaration,
   readIssueOrPrDeclaration,
   saveStickyNoteDeclaration,
+  editStickyNoteEntryDeclaration,
   closeOrOpenIssueDeclaration,
   labelIssueDeclaration,
   saveTodoListItemDeclaration,
@@ -337,10 +372,12 @@ export const boxyWebhookTools = [
 export const boxyBackgroundTools = [
   readMemoryDeclaration,
   saveMemoryDeclaration,
+  editMemoryEntryDeclaration,
   searchCodeDeclaration,
   readFileDeclaration,
   readIssueOrPrDeclaration,
   saveStickyNoteDeclaration,
+  editStickyNoteEntryDeclaration,
   closeOrOpenIssueDeclaration,
   labelIssueDeclaration,
   saveTodoListItemDeclaration,
@@ -391,18 +428,37 @@ export async function executeTool(call, context, app, activityLog) {
 
   try {
     if (call.name === "read_memory") {
-      const currentNotebook = await loadNotebook(repoKey);
-      const content = currentNotebook[call.args.title];
-      toolResult = content ? { content } : { error: `Memory '${call.args.title}' not found in this repo's notebook.` };
+      const currentNotebook = await loadNotebook();
+      const targetRepo = call.args.repo || repoKey;
+      const entry = currentNotebook.find(e => e.title === call.args.title && e.repo === targetRepo);
+      toolResult = entry ? { content: entry.content, repo: entry.repo } : { error: `Memory '${call.args.title}' not found in ${targetRepo}'s notebook. Check the notebook table of contents for the exact title and repo.` };
     }
     else if (call.name === "save_memory") {
       await saveMemoryToFile(repoKey, call.args.title, call.args.content);
       toolResult = { status: "success", message: `Saved '${call.args.title}'!` };
     }
+    else if (call.name === "edit_memory_entry") {
+      const sourceRepo = call.args.repo || repoKey;
+      await updateMemoryEntry(sourceRepo, call.args.title, {
+        newTitle: call.args.new_title,
+        newContent: call.args.new_content,
+        newRepo: call.args.new_repo
+      });
+      toolResult = { status: "success", message: `Updated memory '${call.args.title}'.` };
+    }
     else if (call.name === "save_sticky_note") {
       const { title, content } = call.args;
       await saveStickyNoteToFile(repoKey, title, content);
       toolResult = { status: "success", message: `Sticky note '${title}' successfully saved.` };
+    }
+    else if (call.name === "edit_sticky_note_entry") {
+      const sourceRepo = call.args.repo || repoKey;
+      await updateStickyNoteEntry(sourceRepo, call.args.title, {
+        newTitle: call.args.new_title,
+        newContent: call.args.new_content,
+        newRepo: call.args.new_repo
+      });
+      toolResult = { status: "success", message: `Updated sticky note '${call.args.title}'.` };
     }
     else if (call.name === "search_code") {
       const safeQuery = `${call.args.query} repo:${owner}/${repo}`;
