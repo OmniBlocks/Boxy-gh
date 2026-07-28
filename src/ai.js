@@ -130,7 +130,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
 
   for (const provider of providersToUse) {
     // log provider and model regardless of failure so i can know what stupid model the script is calling
-    appLog && appLog.info(`Currently trying: ${provider.name} with model: ${provider.model}`);
+ 
     const startTime = Date.now();
     try {
       appLog && appLog.info(`Currently trying: ${provider.name} with model: ${provider.model}`);

@@ -438,7 +438,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
       const { owner: currentOwner, repo: currentRepo } = context.repo();
       const repoKey = `${currentOwner}/${currentRepo}`;
 
-      const notebook = await loadNotebook(repoKey);
+      const notebook = await loadNotebook();
       const memoryTitles = Object.keys(notebook);
       const tableOfContents = memoryTitles.length > 0
         ? memoryTitles.map(t => `- ${t}`).join("\n")
@@ -529,6 +529,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
       `;
 
       let conversationTurns = [{ role: "user", parts: [{ text: systemPrompt }] }];
+      app.log.info(conversationTurns);
 
       let response = await callAIWithFallback({
         contents: conversationTurns,
