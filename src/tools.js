@@ -30,7 +30,7 @@ const saveMemoryDeclaration = {
 };
 const executeCommandDeclaration = {
   name: "execute_command",
-  description: "Execute a bash shell command in your computer. To edit an existing file, prefer the 'edit_file' tool instead of shell tricks like sed/cat/heredocs - it's far less error-prone. Still use this tool to create new files, run git commands, use curl, or anything else that isn't editing an existing file's contents. This is a minimal Alpine Linux environment, so a tool you expect (git, curl, etc.) might not be installed yet. Check first with e.g. 'which git curl' and if something's missing, install it with 'apk add <package>' (Alpine Package Keeper). The container is persistent, so anything you install stays around for next time.",
+  description: "Execute a bash shell command in your computer. To edit an existing file, prefer the 'edit_file' tool instead of shell tricks like sed/cat/heredocs - it's far less error-prone. Still use this tool to create new files, run git commands, use curl, or anything else that isn't editing an existing file's contents. This is a minimal Alpine Linux environment, so a tool you expect (git, curl, etc.) might not be installed yet. Check first with e.g. 'which git curl' and if something's missing, install it with 'apk add <package>' (Alpine Package Keeper). Other tools worth reaching for when useful: 'jq' for parsing/filtering JSON output, 'rg' (ripgrep) for fast recursive text search instead of grep, and 'fd' for fast file finding instead of find. Install with apk add the same way if missing. The container is persistent, so anything you install stays around for next time.",
   parameters: {
     type: Type.OBJECT,
     properties: {
