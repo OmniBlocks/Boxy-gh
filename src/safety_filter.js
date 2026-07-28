@@ -42,6 +42,8 @@ const SECRET_REDACTION_PATTERNS = [
   { pattern: /-----BEGIN\s+(?:RSA|DSA|EC|OPENSSH|PRIVATE)\s+KEY----[\s\S]*?-----END\s+(?:RSA|DSA|EC|OPENSSH|PRIVATE)\s+KEY-----/g, replacement: "[REDACTED_PRIVATE_KEY]" },
   // AWS Access Keys
   { pattern: /\b(AKIA[0-9A-Z]{16})\b/g, replacement: "[REDACTED_AWS_KEY]" },
+  // Gemini ai keys
+  { pattern: /\b(AIza[0-9A-Z-_]+)\b/g, replacement: "[REDACTED_GOOGLE_KEY]" },
 ];
 
 /**
