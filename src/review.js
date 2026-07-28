@@ -233,7 +233,7 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
     const call = response.functionCalls[0];
 
     if (call.name === "update_pr_summary" && call.args?.body) {
-      call.args.body += formatActivityLog(activityLog);
+      call.args.body = formatActivityLog(activityLog).trim() + "\n\n" + call.args.body;
     }
 
     const toolResult = await executeTool(call, context, app, activityLog);
