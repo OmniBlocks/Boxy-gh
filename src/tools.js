@@ -306,7 +306,6 @@ const reactCommentDeclaration = {
 export const boxyReviewTools = [
   readMemoryDeclaration,
   saveMemoryDeclaration,
-  editMemoryEntryDeclaration,
   searchCodeDeclaration,
   readFileDeclaration,
   getPrDiffDeclaration,
@@ -319,18 +318,15 @@ export const boxyReviewTools = [
   killCommandDeclaration,
   reactCommentDeclaration,
   saveStickyNoteDeclaration,
-  editStickyNoteEntryDeclaration,
  closeOrOpenIssueDeclaration
 ];
 export const boxyWebhookTools = [
   readMemoryDeclaration,
   saveMemoryDeclaration,
-  editMemoryEntryDeclaration,
   searchCodeDeclaration,
   readFileDeclaration,
   readIssueOrPrDeclaration,
   saveStickyNoteDeclaration,
-  editStickyNoteEntryDeclaration,
   closeOrOpenIssueDeclaration,
   labelIssueDeclaration,
   saveTodoListItemDeclaration,
@@ -345,12 +341,10 @@ export const boxyWebhookTools = [
 export const boxyBackgroundTools = [
   readMemoryDeclaration,
   saveMemoryDeclaration,
-  editMemoryEntryDeclaration,
   searchCodeDeclaration,
   readFileDeclaration,
   readIssueOrPrDeclaration,
   saveStickyNoteDeclaration,
-  editStickyNoteEntryDeclaration,
   closeOrOpenIssueDeclaration,
   labelIssueDeclaration,
   saveTodoListItemDeclaration,
