@@ -309,7 +309,7 @@ const webSearchDeclaration = {
   parameters: {
     type: Type.OBJECT,
     properties: {
-      query: { type: Type.STRING, description: "The search query to look up on the web." },
+      query: { type: Type.STRING, description: "The search query to look up on the web." }, 
     },
     required: ["query"],
   },
