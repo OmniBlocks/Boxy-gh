@@ -16,9 +16,28 @@ const MAX_OUTPUT_SIZE = 200000;
 let activeShell = null;
 let activeTask = null;
 let currentWorkspacePath = DEFAULT_WORKSPACE;
+let shellPromise = null;
 
 function shQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
+function assertSafeContainerKey(key) {
+  if (typeof key !== "string" || !/^[A-Za-z0-9_-]+$/.test(key)) {
+    throw new Error(`Invalid container key: ${key}`);
+  }
+}
+
+function assertSafeBranchName(branch) {
+  if (typeof branch !== "string" || !branch || branch.startsWith("-")) {
+    throw new Error(`Invalid branch name: ${branch}`);
+  }
+}
+
+function assertSafeCloneUrl(url) {
+  if (typeof url !== "string" || !/^(https?:\/\/|git@)/.test(url)) {
+    throw new Error(`Invalid repository clone URL: ${url}`);
+  }
 }
 
 function sshArgs(remoteCommand) {
@@ -54,41 +73,57 @@ async function ensureVmReady() {
 
 async function getShell() {
   if (activeShell && !activeShell.killed) return activeShell;
+  if (shellPromise) return shellPromise;
 
-  await ensureVmReady();
+  shellPromise = (async () => {
+    await ensureVmReady();
 
-  activeShell = spawn("sshpass", sshArgs("/bin/sh"), {
-    env: { ...process.env, SSHPASS: SSH_PASSWORD },
+    const shell = spawn("sshpass", sshArgs("/bin/sh"), {
+      env: { ...process.env, SSHPASS: SSH_PASSWORD },
+    });
+
+    shell.stdout.on("data", (data) => {
+      if (!activeTask) return;
+      activeTask.stdout += data.toString();
+
+      if (activeTask.stdout.length > MAX_OUTPUT_SIZE) {
+        activeTask.stdout = "[...OUTPUT TRUNCATED DUE TO SIZE LIMIT...]\n" + activeTask.stdout.slice(-MAX_OUTPUT_SIZE);
+      }
+    });
+
+    shell.stderr.on("data", (data) => {
+      if (!activeTask) return;
+      activeTask.stderr += data.toString();
+
+      if (activeTask.stderr.length > MAX_OUTPUT_SIZE) {
+        activeTask.stderr = "[...STDERR TRUNCATED DUE TO SIZE LIMIT...]\n" + activeTask.stderr.slice(-MAX_OUTPUT_SIZE);
+      }
+    });
+
+    shell.on("error", (err) => {
+      activeShell = null;
+      if (activeTask) {
+        activeTask.status = "closed";
+        activeTask.stderr += `\n[shell error] ${err.message}`;
+      }
+    });
+
+    shell.on("close", () => {
+      activeShell = null;
+      if (activeTask) {
+        activeTask.status = "closed";
+      }
+    });
+
+    shell.stdin.write(`mkdir -p ${shQuote(currentWorkspacePath)}; cd ${shQuote(currentWorkspacePath)}\n`);
+
+    activeShell = shell;
+    return shell;
+  })().finally(() => {
+    shellPromise = null;
   });
 
-  activeShell.stdout.on("data", (data) => {
-    if (!activeTask) return;
-    activeTask.stdout += data.toString();
-
-    if (activeTask.stdout.length > MAX_OUTPUT_SIZE) {
-      activeTask.stdout = "[...OUTPUT TRUNCATED DUE TO SIZE LIMIT...]\n" + activeTask.stdout.slice(-MAX_OUTPUT_SIZE);
-    }
-  });
-
-  activeShell.stderr.on("data", (data) => {
-    if (!activeTask) return;
-    activeTask.stderr += data.toString();
-
-    if (activeTask.stderr.length > MAX_OUTPUT_SIZE) {
-      activeTask.stderr = "[...STDERR TRUNCATED DUE TO SIZE LIMIT...]\n" + activeTask.stderr.slice(-MAX_OUTPUT_SIZE);
-    }
-  });
-
-  activeShell.on("close", () => {
-    activeShell = null;
-    if (activeTask) {
-      activeTask.status = "closed";
-    }
-  });
-
-  activeShell.stdin.write(`mkdir -p ${shQuote(currentWorkspacePath)}; cd ${shQuote(currentWorkspacePath)}\n`);
-
-  return activeShell;
+  return shellPromise;
 }
 
 export async function runCommandInBoxyContainer(command, isBoxyWebhook = false, token = null, timeSliceMs = 10000) {
@@ -130,14 +165,19 @@ export async function runCommandInBoxyContainer(command, isBoxyWebhook = false, 
       command
     };
 
+    let credentialPrefix = "";
     if (token && (command.includes("git") || command.includes("gh"))) {
-      shellProcess.stdin.write(`export GITHUB_TOKEN=${token}\n`);
-      shellProcess.stdin.write(`git config --global url.'https://x-access-token:${token}@github.com/'.insteadOf 'https://github.com/'\n`);
+      const rewriteKey = `url.https://x-access-token:${token}@github.com/.insteadOf`;
+      credentialPrefix =
+        `GIT_CONFIG_COUNT=1 ` +
+        `GIT_CONFIG_KEY_0=${shQuote(rewriteKey)} ` +
+        `GIT_CONFIG_VALUE_0=${shQuote("https://github.com/")} ` +
+        `GITHUB_TOKEN=${shQuote(token)} `;
     }
 
     const safeCmd = command.replace(/'/g, "'\\''");
     const wrappedStr =
-      `setsid sh -c 'printf "%s\\n" "$$" > "${pidFile}"; ${safeCmd}'; ` +
+      `${credentialPrefix}setsid sh -c 'printf "%s\\n" "$$" > "${pidFile}"; ${safeCmd}'; ` +
       `echo "${uniqueDelimiter}$?"\n`;
 
     shellProcess.stdin.write(wrappedStr);
@@ -227,19 +267,11 @@ export async function killCommandInBoxyContainer() {
 
     await runRemoteCommand(`kill -9 -- "-${pgid}" 2>/dev/null || true`);
 
-    let groupExited = false;
-    for (let i = 0; i < 40; i++) {
-      const { stdout: alive } = await runRemoteCommand(
-        `if kill -0 -- "-${pgid}" 2>/dev/null; then echo alive; fi`
-      );
-
-      if (alive.trim() !== "alive") {
-        groupExited = true;
-        break;
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 50));
-    }
+    const { stdout: exitedOut } = await runRemoteCommand(
+      `i=0; while kill -0 -- "-${pgid}" 2>/dev/null && [ "$i" -lt 40 ]; do sleep 0.05; i=$((i + 1)); done; ` +
+      `if kill -0 -- "-${pgid}" 2>/dev/null; then echo alive; else echo exited; fi`
+    );
+    const groupExited = exitedOut.trim() === "exited";
 
     if (!groupExited) {
       return {
@@ -301,7 +333,7 @@ function runRemoteExec(remoteCommand, input) {
 
 function resolveWorkspacePath(filePath) {
   const resolved = path.resolve(currentWorkspacePath, filePath);
-  if (!resolved.startsWith(currentWorkspacePath)) {
+  if (resolved !== currentWorkspacePath && !resolved.startsWith(currentWorkspacePath + path.sep)) {
     throw new Error(`Access denied: path is outside ${currentWorkspacePath}`);
   }
   return resolved;
@@ -371,6 +403,13 @@ export async function getBoxyCwd() {
 }
 
 export async function createBoxyContainer(key, repoCloneUrl, branch) {
+  if (activeTask) {
+    throw new Error("Cannot switch workspaces while a command is running. Wait for or cancel the active command first.");
+  }
+  assertSafeContainerKey(key);
+  assertSafeCloneUrl(repoCloneUrl);
+  assertSafeBranchName(branch);
+
   await ensureVmReady();
 
   const containerMap = await loadContainerMap();
@@ -409,6 +448,10 @@ export async function createBoxyContainer(key, repoCloneUrl, branch) {
 }
 
 export async function destroyBoxyContainer(key) {
+  if (activeTask) {
+    throw new Error("Cannot destroy a workspace while a command is running. Wait for or cancel the active command first.");
+  }
+
   const containerMap = await loadContainerMap();
   const entry = containerMap[key];
   if (!entry) return false;
