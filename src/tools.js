@@ -29,21 +29,8 @@ const saveMemoryDeclaration = {
     required: ["title", "content"],
   },
 };
-const editMemoryEntryDeclaration = {
-  name: "edit_memory_entry",
-  description: "Update an existing notebook memory entry: rename its title, replace its content, and/or move it to a different repo. Use this to fix a typo, correct outdated content, or migrate an entry that's filed under the wrong repo, instead of saving a duplicate entry.",
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      title: { type: Type.STRING, description: "The exact current title of the memory to edit." },
-      repo: { type: Type.STRING, description: "The 'owner/repo' this memory currently belongs to. Defaults to the repo you're currently operating in if omitted." },
-      new_title: { type: Type.STRING, description: "Optional new title. Omit to keep the current title." },
-      new_content: { type: Type.STRING, description: "Optional new content, replacing the old content entirely. Omit to keep the current content." },
-      new_repo: { type: Type.STRING, description: "Optional 'owner/repo' to move this memory to, for migrating an entry that's filed under the wrong repo. Omit to keep it where it is." },
-    },
-    required: ["title"],
-  },
-};
+
+
 const executeCommandDeclaration = {
   name: "execute_command",
   description: "Execute a bash shell command in your computer. To edit an existing file, prefer the 'edit_file' tool instead of shell tricks like sed/cat/heredocs - it's far less error-prone. Still use this tool to create new files, run git commands, use curl, or anything else that isn't editing an existing file's contents. This is a minimal Alpine Linux environment, so a tool you expect (git, curl, etc.) might not be installed yet. Check first with e.g. 'which git curl' and if something's missing, install it with 'apk add <package>' (Alpine Package Keeper). Other tools worth reaching for when useful: 'jq' for parsing/filtering JSON output, 'rg' (ripgrep) for fast recursive text search instead of grep, and 'fd' for fast file finding instead of find. Install with apk add the same way if missing. The container is persistent, so anything you install stays around for next time.",
@@ -126,21 +113,7 @@ const saveStickyNoteDeclaration = {
     required: ["title", "content"],
   },
 };
-const editStickyNoteEntryDeclaration = {
-  name: "edit_sticky_note_entry",
-  description: "Update an existing sticky note: rename its title, replace its content, and/or move it to a different repo. Use this to correct outdated content or migrate a note that's filed under the wrong repo, instead of saving a duplicate note. Its timestamp is kept as is.",
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      title: { type: Type.STRING, description: "The exact current title of the sticky note to edit." },
-      repo: { type: Type.STRING, description: "The 'owner/repo' this sticky note currently belongs to. Defaults to the repo you're currently operating in if omitted." },
-      new_title: { type: Type.STRING, description: "Optional new title. Omit to keep the current title." },
-      new_content: { type: Type.STRING, description: "Optional new content, replacing the old content entirely. Omit to keep the current content." },
-      new_repo: { type: Type.STRING, description: "Optional 'owner/repo' to move this sticky note to, for migrating a note that's filed under the wrong repo. Omit to keep it where it is." },
-    },
-    required: ["title"],
-  },
-};
+ 
 const saveTodoListItemDeclaration = {
   name: "save_todo_list_item",
   description: "Save a new item to the to-do list.",
