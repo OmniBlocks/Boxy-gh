@@ -1,66 +1,131 @@
-import { spawn, exec } from "child_process";
+import { spawn, execFile } from "child_process";
 import { promisify } from "util";
-import { loadTodoList, loadReviews } from "./fs.js";
+import path from "node:path";
+import { loadTodoList, loadReviews, loadContainerMap, saveContainerMap } from "./fs.js";
 
-const execAsync = promisify(exec);
-const CONTAINER_NAME = "boxy-runner";
-const MAX_OUTPUT_SIZE = 200000;  
+const execFileAsync = promisify(execFile);
+
+const SSH_HOST = process.env.BOXY_SSH_HOST;
+const SSH_PORT = process.env.BOXY_SSH_PORT || "22";
+const SSH_USER = process.env.BOXY_SSH_USER;
+const SSH_PASSWORD = process.env.BOXY_SSH_PASSWORD;
+const REMOTE_BASE = process.env.BOXY_REMOTE_WORKSPACE || `/home/${SSH_USER}/boxy-workspace`;
+const DEFAULT_WORKSPACE = `${REMOTE_BASE}/default`;
+const MAX_OUTPUT_SIZE = 200000;
 
 let activeShell = null;
-let activeTask = null; 
+let activeTask = null;
+let currentWorkspacePath = DEFAULT_WORKSPACE;
+let shellPromise = null;
 
-async function ensureContainerRunning() {
+function shQuote(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
+function assertSafeContainerKey(key) {
+  if (typeof key !== "string" || !/^[A-Za-z0-9_-]+$/.test(key)) {
+    throw new Error(`Invalid container key: ${key}`);
+  }
+}
+
+function assertSafeBranchName(branch) {
+  if (typeof branch !== "string" || !branch || branch.startsWith("-")) {
+    throw new Error(`Invalid branch name: ${branch}`);
+  }
+}
+
+function assertSafeCloneUrl(url) {
+  if (typeof url !== "string" || !/^(https?:\/\/|git@)/.test(url)) {
+    throw new Error(`Invalid repository clone URL: ${url}`);
+  }
+}
+
+function sshArgs(remoteCommand) {
+  if (!SSH_HOST || !SSH_USER || !SSH_PASSWORD) {
+    throw new Error("Missing SSH credentials: set BOXY_SSH_HOST, BOXY_SSH_USER and BOXY_SSH_PASSWORD in .env");
+  }
+  const args = [
+    "-e", "ssh",
+    "-p", SSH_PORT,
+    "-o", "StrictHostKeyChecking=accept-new",
+    "-o", "LogLevel=ERROR",
+    "-q",
+    `${SSH_USER}@${SSH_HOST}`,
+  ];
+  if (remoteCommand !== undefined) args.push(remoteCommand);
+  return args;
+}
+
+function runRemoteCommand(remoteCommand) {
+  return execFileAsync("sshpass", sshArgs(remoteCommand), {
+    env: { ...process.env, SSHPASS: SSH_PASSWORD },
+    maxBuffer: 10 * 1024 * 1024,
+  });
+}
+
+async function ensureVmReady() {
   try {
-    const { stdout } = await execAsync(`docker inspect -f "{{.State.Running}}" ${CONTAINER_NAME}`);
-    if (stdout.trim() === "true") return;
-    await execAsync(`docker start ${CONTAINER_NAME}`);
+    await runRemoteCommand(`mkdir -p ${shQuote(REMOTE_BASE)} ${shQuote(DEFAULT_WORKSPACE)}`);
   } catch (err) {
-    const createCmd = `docker run -d --name ${CONTAINER_NAME} \
-      --restart unless-stopped \
-      --memory="256m" \
-      --memory-swap="256m" \
-      -v /home/gato/boxy-workspace:/workspace \
-      -w /workspace \
-      node:20-alpine tail -f /dev/null`;
-    await execAsync(createCmd);
+    throw new Error(`Could not reach Boxy's VM over SSH (${SSH_USER}@${SSH_HOST}:${SSH_PORT}): ${err.message}`);
   }
 }
 
 async function getShell() {
   if (activeShell && !activeShell.killed) return activeShell;
-  
-  await ensureContainerRunning();
+  if (shellPromise) return shellPromise;
 
-  activeShell = spawn("docker", ["exec", "-i", CONTAINER_NAME, "/bin/sh"]);
+  shellPromise = (async () => {
+    await ensureVmReady();
 
-  activeShell.stdout.on("data", (data) => {
-    if (!activeTask) return;
-    activeTask.stdout += data.toString();
-    
-    if (activeTask.stdout.length > MAX_OUTPUT_SIZE) {
-      activeTask.stdout = "[...OUTPUT TRUNCATED DUE TO SIZE LIMIT...]\n" + activeTask.stdout.slice(-MAX_OUTPUT_SIZE);
-    }
+    const shell = spawn("sshpass", sshArgs("/bin/sh"), {
+      env: { ...process.env, SSHPASS: SSH_PASSWORD },
+    });
+
+    shell.stdout.on("data", (data) => {
+      if (!activeTask) return;
+      activeTask.stdout += data.toString();
+
+      if (activeTask.stdout.length > MAX_OUTPUT_SIZE) {
+        activeTask.stdout = "[...OUTPUT TRUNCATED DUE TO SIZE LIMIT...]\n" + activeTask.stdout.slice(-MAX_OUTPUT_SIZE);
+      }
+    });
+
+    shell.stderr.on("data", (data) => {
+      if (!activeTask) return;
+      activeTask.stderr += data.toString();
+
+      if (activeTask.stderr.length > MAX_OUTPUT_SIZE) {
+        activeTask.stderr = "[...STDERR TRUNCATED DUE TO SIZE LIMIT...]\n" + activeTask.stderr.slice(-MAX_OUTPUT_SIZE);
+      }
+    });
+
+    shell.on("error", (err) => {
+      activeShell = null;
+      if (activeTask) {
+        activeTask.status = "closed";
+        activeTask.stderr += `\n[shell error] ${err.message}`;
+      }
+    });
+
+    shell.on("close", () => {
+      activeShell = null;
+      if (activeTask) {
+        activeTask.status = "closed";
+      }
+    });
+
+    shell.stdin.write(`mkdir -p ${shQuote(currentWorkspacePath)}; cd ${shQuote(currentWorkspacePath)}\n`);
+
+    activeShell = shell;
+    return shell;
+  })().finally(() => {
+    shellPromise = null;
   });
 
-  activeShell.stderr.on("data", (data) => {
-    if (!activeTask) return;
-    activeTask.stderr += data.toString();
-    
-    if (activeTask.stderr.length > MAX_OUTPUT_SIZE) {
-      activeTask.stderr = "[...STDERR TRUNCATED DUE TO SIZE LIMIT...]\n" + activeTask.stderr.slice(-MAX_OUTPUT_SIZE);
-    }
-  });
-
-  activeShell.on("close", () => {
-    activeShell = null;
-    if (activeTask) {
-      activeTask.status = "closed";
-    }
-  });
-
-  return activeShell;
+  return shellPromise;
 }
- 
+
 export async function runCommandInBoxyContainer(command, isBoxyWebhook = false, token = null, timeSliceMs = 10000) {
   let isBusy = false;
   const todoList = await loadTodoList();
@@ -71,7 +136,7 @@ export async function runCommandInBoxyContainer(command, isBoxyWebhook = false, 
     const reviews = await loadReviews();
     if (Object.keys(reviews).length > 0) isBusy = true;
   }
-  
+
 
   const shellProcess = await getShell();
 
@@ -100,16 +165,21 @@ export async function runCommandInBoxyContainer(command, isBoxyWebhook = false, 
       command
     };
 
+    let credentialPrefix = "";
     if (token && (command.includes("git") || command.includes("gh"))) {
-      shellProcess.stdin.write(`export GITHUB_TOKEN=${token}\n`);
-      shellProcess.stdin.write(`git config --global url.'https://x-access-token:${token}@github.com/'.insteadOf 'https://github.com/'\n`);
+      const rewriteKey = `url.https://x-access-token:${token}@github.com/.insteadOf`;
+      credentialPrefix =
+        `GIT_CONFIG_COUNT=1 ` +
+        `GIT_CONFIG_KEY_0=${shQuote(rewriteKey)} ` +
+        `GIT_CONFIG_VALUE_0=${shQuote("https://github.com/")} ` +
+        `GITHUB_TOKEN=${shQuote(token)} `;
     }
 
     const safeCmd = command.replace(/'/g, "'\\''");
     const wrappedStr =
-      `setsid sh -c 'printf "%s\\n" "$$" > "${pidFile}"; ${safeCmd}'; ` +
+      `${credentialPrefix}setsid sh -c 'printf "%s\\n" "$$" > "${pidFile}"; ${safeCmd}'; ` +
       `echo "${uniqueDelimiter}$?"\n`;
-    
+
     shellProcess.stdin.write(wrappedStr);
   }
 
@@ -124,9 +194,9 @@ export async function runCommandInBoxyContainer(command, isBoxyWebhook = false, 
       const exitCodeMatch = outputParts[1].match(/^(\d+)/);
       const exitCode = exitCodeMatch ? parseInt(exitCodeMatch[1], 10) : 0;
       const cleanStderr = activeTask.stderr.trim();
- 
+
       if (activeTask.pidFile) {
-        execAsync(`docker exec ${CONTAINER_NAME} sh -c 'rm -f "${activeTask.pidFile}"'`).catch(() => {});
+        runRemoteCommand(`rm -f ${shQuote(activeTask.pidFile)}`).catch(() => {});
       }
 
       activeTask = null;
@@ -148,7 +218,7 @@ export async function runCommandInBoxyContainer(command, isBoxyWebhook = false, 
     message: "The command is taking longer than usual or waiting for interactive input. You can call 'send_stdin' to respond, 'wait_command' to continue waiting, or 'kill_command' to terminate it."
   };
 }
- 
+
 export async function sendStdinToBoxyContainer(text) {
   if (!activeShell || !activeTask) {
     return { error: "No command is currently running to send input to." };
@@ -159,14 +229,14 @@ export async function sendStdinToBoxyContainer(text) {
 
   return await runCommandInBoxyContainer(null, false, null, 10000);
 }
- 
+
 export async function waitCommandInBoxyContainer(timeSliceMs = 10000) {
   if (!activeTask) {
     return { error: "No command is currently running to wait for." };
   }
   return await runCommandInBoxyContainer(null, false, null, timeSliceMs);
 }
- 
+
 export async function killCommandInBoxyContainer() {
   if (!activeTask) {
     return { error: "No command is currently running to kill." };
@@ -176,13 +246,12 @@ export async function killCommandInBoxyContainer() {
   const { pidFile } = task;
 
   try {
-    const { stdout } = await execAsync(
-      `docker exec ${CONTAINER_NAME} sh -c ` +
-      `'i=0; ` +
-      `while [ ! -s "${pidFile}" ] && [ "$i" -lt 40 ]; do ` +
+    const { stdout } = await runRemoteCommand(
+      `i=0; ` +
+      `while [ ! -s ${shQuote(pidFile)} ] && [ "$i" -lt 40 ]; do ` +
       `sleep 0.05; i=$((i + 1)); ` +
       `done; ` +
-      `cat "${pidFile}" 2>/dev/null || true'`
+      `cat ${shQuote(pidFile)} 2>/dev/null || true`
     );
 
     const pgid = stdout.trim();
@@ -196,25 +265,13 @@ export async function killCommandInBoxyContainer() {
       };
     }
 
-    await execAsync(
-      `docker exec ${CONTAINER_NAME} sh -c ` +
-      `'kill -9 -- "-${pgid}" 2>/dev/null || true'`
+    await runRemoteCommand(`kill -9 -- "-${pgid}" 2>/dev/null || true`);
+
+    const { stdout: exitedOut } = await runRemoteCommand(
+      `i=0; while kill -0 -- "-${pgid}" 2>/dev/null && [ "$i" -lt 40 ]; do sleep 0.05; i=$((i + 1)); done; ` +
+      `if kill -0 -- "-${pgid}" 2>/dev/null; then echo alive; else echo exited; fi`
     );
-
-    let groupExited = false;
-    for (let i = 0; i < 40; i++) {
-      const { stdout: alive } = await execAsync(
-        `docker exec ${CONTAINER_NAME} sh -c ` +
-        `'if kill -0 -- "-${pgid}" 2>/dev/null; then echo alive; fi'`
-      );
-
-      if (alive.trim() !== "alive") {
-        groupExited = true;
-        break;
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 50));
-    }
+    const groupExited = exitedOut.trim() === "exited";
 
     if (!groupExited) {
       return {
@@ -232,9 +289,7 @@ export async function killCommandInBoxyContainer() {
       activeTask = null;
     }
 
-    await execAsync(
-      `docker exec ${CONTAINER_NAME} sh -c 'rm -f "${pidFile}"'`
-    ).catch(() => {});
+    await runRemoteCommand(`rm -f ${shQuote(pidFile)}`).catch(() => {});
 
     return {
       status: "killed",
@@ -252,9 +307,11 @@ export async function killCommandInBoxyContainer() {
   }
 }
 
-function runDockerExec(args, input) {
+function runRemoteExec(remoteCommand, input) {
   return new Promise((resolve, reject) => {
-    const child = spawn("docker", args);
+    const child = spawn("sshpass", sshArgs(remoteCommand), {
+      env: { ...process.env, SSHPASS: SSH_PASSWORD },
+    });
     let stdout = "";
     let stderr = "";
 
@@ -263,7 +320,7 @@ function runDockerExec(args, input) {
     child.on("error", reject);
     child.on("close", (code) => {
       if (code !== 0) {
-        reject(new Error(stderr.trim() || `docker exec exited with code ${code}`));
+        reject(new Error(stderr.trim() || `ssh command exited with code ${code}`));
       } else {
         resolve(stdout);
       }
@@ -275,9 +332,9 @@ function runDockerExec(args, input) {
 }
 
 function resolveWorkspacePath(filePath) {
-  const resolved = path.resolve("/workspace", filePath);
-  if (!resolved.startsWith("/workspace")) {
-    throw new Error("Access denied: path is outside /workspace");
+  const resolved = path.resolve(currentWorkspacePath, filePath);
+  if (resolved !== currentWorkspacePath && !resolved.startsWith(currentWorkspacePath + path.sep)) {
+    throw new Error(`Access denied: path is outside ${currentWorkspacePath}`);
   }
   return resolved;
 }
@@ -293,12 +350,12 @@ export async function editFileInBoxyContainer(filePath, edits) {
     return { error: "No edits were provided." };
   }
 
-  await ensureContainerRunning();
+  await ensureVmReady();
   const target = resolveWorkspacePath(filePath);
 
   let content;
   try {
-    content = await runDockerExec(["exec", CONTAINER_NAME, "cat", target]);
+    content = await runRemoteExec(`cat ${shQuote(target)}`);
   } catch (err) {
     return { error: `Could not read '${target}': ${err.message}. This tool only edits files that already exist. Use execute_command to create new files.` };
   }
@@ -327,7 +384,7 @@ export async function editFileInBoxyContainer(filePath, edits) {
   }
 
   try {
-    await runDockerExec(["exec", "-i", CONTAINER_NAME, "dd", `of=${target}`], updated);
+    await runRemoteExec(`dd of=${shQuote(target)}`, updated);
   } catch (err) {
     return { error: `Failed to write '${target}': ${err.message}` };
   }
@@ -342,5 +399,74 @@ export async function editFileInBoxyContainer(filePath, edits) {
 
 export async function getBoxyCwd() {
   const result = await runCommandInBoxyContainer("pwd", false);
-  return result.status === "completed" ? result.stdout.trim() : "/workspace";
+  return result.status === "completed" ? result.stdout.trim() : currentWorkspacePath;
+}
+
+export async function createBoxyContainer(key, repoCloneUrl, branch) {
+  if (activeTask) {
+    throw new Error("Cannot switch workspaces while a command is running. Wait for or cancel the active command first.");
+  }
+  assertSafeContainerKey(key);
+  assertSafeCloneUrl(repoCloneUrl);
+  assertSafeBranchName(branch);
+
+  await ensureVmReady();
+
+  const containerMap = await loadContainerMap();
+  const remotePath = `${REMOTE_BASE}/${key}`;
+  const existing = containerMap[key];
+
+  let reused = false;
+  if (existing) {
+    try {
+      await runRemoteCommand(`test -d ${shQuote(remotePath + "/.git")}`);
+      reused = true;
+    } catch {
+      reused = false;
+    }
+  }
+
+  if (reused) {
+    await runRemoteCommand(
+      `cd ${shQuote(remotePath)} && git fetch origin ${shQuote(branch)} && git checkout ${shQuote(branch)} && git reset --hard ${shQuote("origin/" + branch)}`
+    );
+  } else {
+    await runRemoteCommand(
+      `rm -rf ${shQuote(remotePath)} && git clone --branch ${shQuote(branch)} --single-branch ${shQuote(repoCloneUrl)} ${shQuote(remotePath)}`
+    );
+  }
+
+  containerMap[key] = { path: remotePath, repoCloneUrl, branch, updatedAt: new Date().toISOString() };
+  await saveContainerMap(containerMap);
+
+  currentWorkspacePath = remotePath;
+  if (activeShell && !activeShell.killed) {
+    activeShell.stdin.write(`cd ${shQuote(remotePath)}\n`);
+  }
+
+  return { containerName: key, reused, path: remotePath };
+}
+
+export async function destroyBoxyContainer(key) {
+  if (activeTask) {
+    throw new Error("Cannot destroy a workspace while a command is running. Wait for or cancel the active command first.");
+  }
+
+  const containerMap = await loadContainerMap();
+  const entry = containerMap[key];
+  if (!entry) return false;
+
+  await runRemoteCommand(`rm -rf ${shQuote(entry.path)}`).catch(() => {});
+
+  delete containerMap[key];
+  await saveContainerMap(containerMap);
+
+  if (currentWorkspacePath === entry.path) {
+    currentWorkspacePath = DEFAULT_WORKSPACE;
+    if (activeShell && !activeShell.killed) {
+      activeShell.stdin.write(`cd ${shQuote(DEFAULT_WORKSPACE)}\n`);
+    }
+  }
+
+  return true;
 }

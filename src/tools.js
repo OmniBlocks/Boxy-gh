@@ -33,13 +33,13 @@ const saveMemoryDeclaration = {
 
 const executeCommandDeclaration = {
   name: "execute_command",
-  description: "Execute a bash shell command in your computer. To edit an existing file, prefer the 'edit_file' tool instead of shell tricks like sed/cat/heredocs - it's far less error-prone. Still use this tool to create new files, run git commands, use curl, or anything else that isn't editing an existing file's contents. This is a minimal Alpine Linux environment, so a tool you expect (git, curl, etc.) might not be installed yet. Check first with e.g. 'which git curl' and if something's missing, install it with 'apk add <package>' (Alpine Package Keeper). Other tools worth reaching for when useful: 'jq' for parsing/filtering JSON output, 'rg' (ripgrep) for fast recursive text search instead of grep, and 'fd' for fast file finding instead of find. Install with apk add the same way if missing. The container is persistent, so anything you install stays around for next time.",
+  description: "Execute a shell command in your computer. This is 'ash' (BusyBox's shell), NOT bash. It's the default /bin/sh on Alpine Linux. Most everyday commands work the same, but bash-only syntax (arrays, '[[ ]]', 'function' keyword, process substitution '<(...)', some 'read'/'local' flags, etc.) will fail or behave differently. If a command errors out in a way that looks like a shell-syntax problem, look up ash/BusyBox/POSIX sh equivalents rather than assuming the tool is broken. To edit an existing file, prefer the 'edit_file' tool instead of shell tricks like sed/cat/heredocs - it's far less error-prone. Still use this tool to create new files, run git commands, use curl, or anything else that isn't editing an existing file's contents. This runs on a persistent remote Alpine Linux VM (over SSH) with only ~1.9GB of RAM and 20GB of storage total, so a tool you expect (git, curl, etc.) might not be installed yet. Check first with e.g. 'which git curl' and if something's missing, install it with 'apk add' (it's Alpine, so apt-get/yum won't exist). Other tools worth reaching for when useful: 'jq' for parsing/filtering JSON output, 'rg' (ripgrep) for fast recursive text search instead of grep, and 'fd' for fast file finding instead of find. The VM is persistent, so anything you install stays around for next time, but keep the 20GB disk and ~1.9GB RAM limits in mind — avoid installing large toolchains or running memory-heavy commands.",
   parameters: {
     type: Type.OBJECT,
     properties: {
       command: {
         type: Type.STRING,
-        description: "The full bash command string to execute (e.g. 'ls -la', 'npm test', 'cat file.txt | grep foo')."
+        description: "The full ash (POSIX sh) command string to execute (e.g. 'ls -la', 'npm test', 'cat file.txt | grep foo'). Avoid bash-only syntax."
       }
     },
     required: ["command"],
