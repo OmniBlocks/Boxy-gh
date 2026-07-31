@@ -449,9 +449,8 @@ export async function executeTool(call, context, app, activityLog) {
   try {
     if (call.name === "read_memory") {
       const currentNotebook = await loadNotebook();
-      const targetRepo = call.args.repo || repoKey;
-      const entry = currentNotebook.find(e => e.title === call.args.title && e.repo === targetRepo);
-      toolResult = entry ? { content: entry.content, repo: entry.repo } : { error: `Memory '${call.args.title}' not found in ${targetRepo}'s notebook. Check the notebook table of contents for the exact title and repo.` };
+      const content = currentNotebook[call.args.title];
+      toolResult = content ? { content } : { error: `Memory '${call.args.title}' not found.` };
     }
     else if (call.name === "save_memory") {
       await saveMemoryToFile(repoKey, call.args.title, call.args.content);
