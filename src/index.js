@@ -586,7 +586,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         throw new Error(`Boxy broke reason: ${finishReason}\n Full API Response: ${JSON.stringify(response)}\n\n`);
       }
       let responseText = prependActivityLog(response.text, activityLog);
-      responseText += "\n\n<sub>You are interacting with an AI system.</sub>"
+      responseText += "\n\n<sub>**AI**</sub>"
       app.log.info(response.text);
 
       const repo = context.repo();
