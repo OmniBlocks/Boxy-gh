@@ -327,7 +327,6 @@ export const boxyReviewTools = [
   sendStdinDeclaration,
   waitCommandDeclaration,
   killCommandDeclaration,
-  reactCommentDeclaration,
   webSearchDeclaration,
   saveStickyNoteDeclaration,
  closeOrOpenIssueDeclaration
