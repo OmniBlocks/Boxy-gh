@@ -110,7 +110,7 @@ export async function saveContainerMap(containerMap) {
 }
 
 export const NOTEBOOK_FILE = path.resolve("./boxy_notebook.json");
-export const STICKY_NOTES_FILE = path.resolve("./boxy_sticky_notes.json");
+export const STICKY_NOTES_FILE = path.resolve("./boxy_sticky_notes.json"); 
 export const TODO_LIST_FILE = path.resolve("./boxy_todo_list.json");
 export const REVIEWS_FILE = path.resolve("./boxy_reviews.json");
 export const REVERT_FILE = path.resolve("./boxy_revert_pending.json");
