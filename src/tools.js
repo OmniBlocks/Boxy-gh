@@ -452,7 +452,7 @@ export async function executeTool(call, context, app, activityLog) {
       toolResult = content ? { content } : { error: `Memory '${call.args.title}' not found.` };
     }
     else if (call.name === "save_memory") {
-      await saveMemoryToFile(repoKey, call.args.title, call.args.content);
+      await saveMemoryToFile(call.args.title, call.args.content);
       toolResult = { status: "success", message: `Saved '${call.args.title}'!` };
     }
     else if (call.name === "edit_memory_entry") {
@@ -466,7 +466,7 @@ export async function executeTool(call, context, app, activityLog) {
     }
     else if (call.name === "save_sticky_note") {
       const { title, content } = call.args;
-      await saveStickyNoteToFile(repoKey, title, content);
+      await saveStickyNoteToFile(title, content);
       toolResult = { status: "success", message: `Sticky note '${title}' successfully saved.` };
     }
     else if (call.name === "edit_sticky_note_entry") {
