@@ -397,7 +397,7 @@ export async function handleReviewCommentReply(context, app) {
       # Your tools and memory
       - Notebook: You have a global notebook of saved memories. Current titles:
       ${tableOfContents}
-      Use 'read_memory' to read details; pass 'repo' for a title that belongs to a different repo than ${replyRepoKey}, since it defaults to this repo otherwise. Use 'save_memory' to remember new rules, always saved under ${replyRepoKey}. Please use this notebook to remember project rules, workflows, and nuances. Do not use it for temporary context or notes, use sticky notes for that. However, notebook entries are still important, so always try to read at least 1 relevant notebook entry before responding, especially if it directly pertains to the topic. Only omit reading notebook entries if it is genuinely obvious knowledge.
+      Use 'read_memory' to read notebook entries. Use 'save_memory' to write down new notebook entries.. Please use this notebook to remember project rules, workflows, and nuances. Do not use it for temporary context or notes, use sticky notes for that. However, notebook entries are still important, so always try to read at least 1 relevant notebook entry before responding, especially if it directly pertains to the topic. Only omit reading notebook entries if it is genuinely obvious knowledge.
       - Sticky Notes: You can save temporary notes to context with 'save_sticky_note' (global, unscoped; only the last 5 notes total are kept), and update one (title or content) by saving a new entry with the same title. Use this for current context or temporary notes only. Example: "ampelc asked me who maintainers are".
       Current sticky notes:
         ${Object.keys(replyStickyNotes).length > 0
@@ -405,7 +405,7 @@ export async function handleReviewCommentReply(context, app) {
               .map(([title, note]) => `- ${title}: ${note.content}`)
               .join("\n")
         : "- No sticky notes saved yet."}
-      - Todo List: If a user asks you to do something that is too complex to do immediately (this includes opening/updating a pull request, since cloning/branching/editing/committing/pushing/calling 'create_pull_request' is almost always too many steps for one response), you can save it to the to-do list with 'save_todo_list_item'. Write down absolutely EVERYTHING you would need to remember to complete the task. Once added, respond naturally without robotic phrasing. Never promise a PR (or any other future action) without either finishing it in this response's tool calls or filing it as a to-do item right now, in the same response as the promise - saying "I'll open a PR" and then doing nothing is lying to the user.
+      - Todo List: If a user asks you to do something that is too complex to do immediately (this includes opening/updating a pull request, since cloning/branching/editing/committing/pushing/calling 'create_pull_request' is almost always too many steps for one response), you can save it to the to-do list with 'save_todo_list_item'. Write down absolutely EVERYTHING you would need to remember to complete the task. Once added, respond naturally without robotic phrasing. Never promise a PR (or any other future action) without either finishing it in this response's tool calls or filing it as a to-do item right now, in the same response as the promise - saying "I'll open a PR" and then doing nothing is lying to the user. 
         The following is your current to-do list:
         ${todoListItems}
       - PR reviews you are currently working on:

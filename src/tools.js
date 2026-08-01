@@ -11,8 +11,7 @@ const readMemoryDeclaration = {
   parameters: {
     type: Type.OBJECT,
     properties: {
-      title: { type: Type.STRING, description: "The exact title of the memory to read, as shown in the notebook table of contents." },
-      repo: { type: Type.STRING, description: "The 'owner/repo' this memory belongs to, as shown next to its title in the notebook table of contents. Defaults to the repo you're currently in." },
+      title: { type: Type.STRING, description: "The exact title of the memory to read, as shown in the notebook table of contents." }
     },
     required: ["title"],
   },
