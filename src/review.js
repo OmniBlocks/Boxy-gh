@@ -67,33 +67,24 @@ export async function triggerCodeReview(context, app) {
   } catch (error) { app.log.error(`im a failure cuz ${error.message}`); }
 }
 export async function handleWorkflowCompleted(context, app, manual = false, manualPrNum = null) {
-  // screw it im adding a billion logs cuz its not working
-  const run = context.payload.workflow_run;
-  if (!manual) {
+  const run = manual ? null : context.payload.workflow_run;
+  if (!manual && run) {
     app.log.info(`received ${run.name}, title ${run.display_title}, conclusion ${run.conclusion}, id ${run.id}`);
-  }
-  try {
-    if (run.conclusion === "cancelled" && !manual) {
+    if (run.conclusion === "cancelled") {
       app.log.warn('ignoring because workflow was cancelled');
       return;
     }
   }
-  catch (error) { }
-  let title = false;
-  if (!manual) {
-    title = run.display_title ? run.display_title.match(/PR #(\d+)/) : null;
-  }
+
+  let title = (!manual && run && run.display_title) ? run.display_title.match(/PR #(\d+)/) : null;
   if (!title && !manual) {
-    app.log.warn('ignoring becasee no PR number found in workflow title');
+    app.log.warn('ignoring because no PR number found in workflow title');
     return;
   }
+
   const reviews = await loadReviews();
-  let prNum;
-  if (!manual) {
-    prNum = title[1];
-  } else {
-    prNum = manualPrNum;
-  }
+  let prNum = manual ? manualPrNum : title[1];
+
   if (!reviews[prNum]) {
     app.log.warn(`PR #${prNum} is not in file`);
     return;
@@ -106,32 +97,36 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
 
   app.log.info(`Workflow finished for PR #${prNum}. Extracting artifacts...`);
   let logsText = "No logs found.", screenshotsMarkdown = "";
+  let livePreviewLink = "Not available for this repo.";
+ 
+  if (!manual && run) {
+    livePreviewLink = `https://${context.repo().owner}.github.io/${context.repo().repo}/pr-${prNum}/`;
+    const runId = run.id;
 
-  try {
-    const { data: artifacts } = await context.octokit.rest.actions.listWorkflowRunArtifacts({ owner: context.repo().owner, repo: context.repo().repo, run_id: run.id });
-    const targetArtifact = artifacts.artifacts.find(a => a.name === "final-test-results" || a.name === "build-test-logs");
+    try {
+      const { data: artifacts } = await context.octokit.rest.actions.listWorkflowRunArtifacts({ owner: context.repo().owner, repo: context.repo().repo, run_id: runId });
+       
+      const targetArtifact = artifacts.artifacts.find(a => a.name === "final-test-results" || a.name === "test-results" || a.name === "build-test-logs");
 
-    if (targetArtifact) {
-      const { data: zipBuffer } = await context.octokit.rest.actions.downloadArtifact({ owner: context.repo().owner, repo: context.repo().repo, artifact_id: targetArtifact.id, archive_format: "zip" });
-      const zip = new AdmZip(Buffer.from(zipBuffer));
-      let extractedLogs = "";
+      if (targetArtifact) {
+        const { data: zipBuffer } = await context.octokit.rest.actions.downloadArtifact({ owner: context.repo().owner, repo: context.repo().repo, artifact_id: targetArtifact.id, archive_format: "zip" });
+        const zip = new AdmZip(Buffer.from(zipBuffer));
+        let extractedLogs = "";
 
-      for (const entry of zip.getEntries()) {
-        if (entry.name.endsWith(".log")) extractedLogs += `\n=== ${entry.name} ===\n${entry.getData().toString("utf8").substring(0, 3000)}`;
-        if (entry.name.endsWith(".png")) {
-          try {
-            const formData = new FormData();
-            formData.append('api_key', process.env.IMGHIPPO_API_KEY);
-            formData.append('file', new Blob([entry.getData()], { type: 'image/png' }), entry.name);
-            const res = await fetch('https://api.imghippo.com/v1/upload', { method: 'POST', body: formData });
-            const json = await res.json();
-            if (json.success) screenshotsMarkdown += `\n![${entry.name}](${json.data.url})`;
-          } catch (e) { app.log.warn("ImgHippo failed: " + e.message); }
+        for (const entry of zip.getEntries()) {
+          // Parse text files
+          if (entry.name.endsWith(".log") || entry.name.endsWith(".txt")) {
+            extractedLogs += `\n=== ${entry.name} ===\n${entry.getData().toString("utf8").substring(0, 3000)}`;
+          } 
+          if (entry.name.endsWith(".png") || entry.name.endsWith(".gif")) {
+            const rawUrl = `https://raw.githubusercontent.com/${context.repo().owner}/${context.repo().repo}/vrt-images/pr-${prNum}/run-${runId}/${entry.name}`;
+            screenshotsMarkdown += `\n![${entry.name}](${rawUrl})`;
+          }
         }
+        if (extractedLogs) logsText = extractedLogs;
       }
-      if (extractedLogs) logsText = extractedLogs;
-    }
-  } catch (error) { app.log.error("Artifact processing failed: " + error.message); }
+    } catch (error) { app.log.error("Artifact processing failed: " + error.message); }
+  }
 
   reviewState.status = "reviewing";
   await saveReviews(reviews);
@@ -178,9 +173,10 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
     
 
     Context:
+    Context:
     - Head SHA: ${reviewState.head_sha}
     - Build/Test Logs: \n${logsText}
-    - Playwright Screenshots: \n${screenshotsMarkdown || "None."}
+    ${manual ? "" : `- Live PR Preview: ${livePreviewLink}\n    - Playwright Screenshots: \n${screenshotsMarkdown || "None."}`}
     - PR Context: \n${prDescriptionText}
     - PR author: ${prAuthor}
     - Branch name: ${prBranch}
@@ -209,7 +205,7 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
        - A detailed SUMMARY FIRST.
        - Then a Mermaid chart showing the logic flow.
        - Then, a short poem from your perspective (Boxy) about the PR. The poem should be in quote blocks like > under a small #### heading. Wrap it in a details tag.
-       - Finally, the screenshots under a heading exactly called "### GUI Screenshots". It must be wrapped in a details tag. If there are no screenshots, this means the tests found no changes in the GUI (or broke the build).
+       - Finally, the screenshots under a heading exactly called "### GUI Screenshots".  If a Live PR Preview link is provided in your context, include it as a clickable link right above the screenshots! This link is what allows other people to test the PR's changes before they are merged into the main build of the site. It must be wrapped in a details tag. If there are no screenshots, this means the tests found no changes in the GUI (or broke the build). If there are no screenshots or preview link (e.g. you are running in a non-monorepo without this workflow), skip this section entirely.
        - (optional) Slop and Spam detection: If you feel that the PR is slop or spam (such as the pr title/description and diff making absolutely no sense) you can make an optional heading at the top called Slop Detected and explain your reasoning wrapped in a quote block with a [!WARNING] markdown feature. If it's not, then just don't add this section at all. An example is changing an automated status check to "passed" because of an old issue asking for a status update on OmniBlocks itself (yes, this really happened).
     5. Write down a detailed audit of the PR in a notebook entry. In the title, write "PR #${prNum} Repo: ${reviewRepoKey} Branch: ${prBranch} Head SHA: ${reviewState.head_sha}". In the content, write everything about the PR along with everything you found and everything you may need to remember in a future review of this PR. If you see a notebook entry listed above that already has this title, please read it so that you can be caught up on your old review, and update it by simply using save_memory again with the updated content and the EXACT same title. Remember, NOBODY can see your notebook entries except YOU, and they are meant for YOU to see, unlike inline comments, pr summary, or finish review.
 
