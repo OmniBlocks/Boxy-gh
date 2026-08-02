@@ -594,6 +594,7 @@ export async function executeTool(call, context, app, activityLog) {
       }
     }
     else if (call.name === "create_comment") {
+      app.log.info(`Boxy creating comment on issue #${call.args.issue_number}: ${call.args.body}`);
       const { data } = await context.octokit.rest.issues.createComment({
         owner, repo,
         issue_number: call.args.issue_number,
