@@ -371,8 +371,14 @@ export const boxyBackgroundTools = [
 ];
 function sanitizeForLog(value) {
   try {
-    const json = JSON.stringify(value === undefined ? {} : value, null, 2);
+    let json = JSON.stringify(value === undefined ? {} : value, null, 2);
+    // if the tool output is longer than 10,000 characters, truncate it for the log to avoid bloating the comment and getting unprocessable entity errors from GitHub for >65336 characters in a comment
+    
+    if (json.length > 10000) {
+      json = json.substring(0, 10000) + "...";
+    }
     return redactSecrets(json || "{}");
+    
   } catch {
     return "[unserializable]";
   }
@@ -818,6 +824,7 @@ export async function executeTool(call, context, app, activityLog) {
   }
 
   if (Array.isArray(activityLog)) {
+    
     activityLog.push({
       tool: call.name,
       params: sanitizeForLog(call.args),
