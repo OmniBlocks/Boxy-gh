@@ -247,7 +247,7 @@ async function startBackgroundQueue(app) {
 
           const activityLog = [];
           let loopCount = 0;
-          while (loopCount < 60) {
+          while (loopCount < 150) {
             // If the model tried to just talk using text instead of calling a tool
             if (!response.functionCalls || response.functionCalls.length === 0) {
               const currentList = await loadTodoList();
