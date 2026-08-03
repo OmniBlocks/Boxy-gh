@@ -149,6 +149,17 @@ const readFileDeclaration = {
     required: ["path"],
   },
 };
+const readFileVerbatimDeclaration = {
+  name: "read_file_verbatim",
+  description: "Read the exact contents of a specific file in the repository verbatim without truncation.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      path: { type: Type.STRING, description: "The file path in the repo (e.g., 'src/index.js')." },
+    },
+    required: ["path"],
+  },
+};
 const readIssueOrPrDeclaration = {
   name: "read_issue_or_pr",
   description: "Read the title, description, and comments of a specific issue or pull request.",
@@ -319,6 +330,7 @@ export const boxyReviewTools = [
   saveMemoryDeclaration,
   searchCodeDeclaration,
   readFileDeclaration,
+  readFileVerbatimDeclaration,
   getPrDiffDeclaration,
   updatePrSummaryDeclaration,
   createInlineCommentDeclaration,
@@ -336,6 +348,7 @@ export const boxyWebhookTools = [
   saveMemoryDeclaration,
   searchCodeDeclaration,
   readFileDeclaration,
+  readFileVerbatimDeclaration,
   readIssueOrPrDeclaration,
   saveStickyNoteDeclaration,
   closeOrOpenIssueDeclaration,
@@ -355,6 +368,7 @@ export const boxyBackgroundTools = [
   saveMemoryDeclaration,
   searchCodeDeclaration,
   readFileDeclaration,
+  readFileVerbatimDeclaration,
   readIssueOrPrDeclaration,
   saveStickyNoteDeclaration,
   closeOrOpenIssueDeclaration,
@@ -502,6 +516,21 @@ export async function executeTool(call, context, app, activityLog) {
           content: decodedContent.length > MAX_CHARS
             ? decodedContent.substring(0, MAX_CHARS) + "\n\n... [FILE TRUNCATED FOR SIZE]"
             : decodedContent
+        };
+      }
+    }
+    else if (call.name === "read_file_verbatim") {
+      const { data } = await context.octokit.rest.repos.getContent({
+        owner, repo, path: call.args.path
+      });
+      if (Array.isArray(data)) {
+        toolResult = { type: "directory", files: data.map(f => f.path) };
+      } else if (data.type === "file") {
+        const decodedContent = Buffer.from(data.content, "base64").toString("utf8");
+        toolResult = {
+          type: "file",
+          path: data.path,
+          content: decodedContent
         };
       }
     }
