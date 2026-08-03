@@ -11,8 +11,7 @@ const readMemoryDeclaration = {
   parameters: {
     type: Type.OBJECT,
     properties: {
-      title: { type: Type.STRING, description: "The exact title of the memory to read, as shown in the notebook table of contents." },
-      repo: { type: Type.STRING, description: "The 'owner/repo' this memory belongs to, as shown next to its title in the notebook table of contents. Defaults to the repo you're currently in." },
+      title: { type: Type.STRING, description: "The exact title of the memory to read, as shown in the notebook table of contents." }
     },
     required: ["title"],
   },
@@ -386,8 +385,14 @@ export const boxyBackgroundTools = [
 ];
 function sanitizeForLog(value) {
   try {
-    const json = JSON.stringify(value === undefined ? {} : value, null, 2);
+    let json = JSON.stringify(value === undefined ? {} : value, null, 2);
+    // if the tool output is longer than 10,000 characters, truncate it for the log to avoid bloating the comment and getting unprocessable entity errors from GitHub for >65336 characters in a comment
+    
+    if (json.length > 10000) {
+      json = json.substring(0, 10000) + "...";
+    }
     return redactSecrets(json || "{}");
+    
   } catch {
     return "[unserializable]";
   }
@@ -466,7 +471,7 @@ export async function executeTool(call, context, app, activityLog) {
       toolResult = content ? { content } : { error: `Memory '${call.args.title}' not found.` };
     }
     else if (call.name === "save_memory") {
-      await saveMemoryToFile(repoKey, call.args.title, call.args.content);
+      await saveMemoryToFile(call.args.title, call.args.content);
       toolResult = { status: "success", message: `Saved '${call.args.title}'!` };
     }
     else if (call.name === "edit_memory_entry") {
@@ -480,7 +485,7 @@ export async function executeTool(call, context, app, activityLog) {
     }
     else if (call.name === "save_sticky_note") {
       const { title, content } = call.args;
-      await saveStickyNoteToFile(repoKey, title, content);
+      await saveStickyNoteToFile(title, content);
       toolResult = { status: "success", message: `Sticky note '${title}' successfully saved.` };
     }
     else if (call.name === "edit_sticky_note_entry") {
@@ -624,6 +629,7 @@ export async function executeTool(call, context, app, activityLog) {
       }
     }
     else if (call.name === "create_comment") {
+      app.log.info(`Boxy creating comment on issue #${call.args.issue_number}: ${call.args.body}`);
       const { data } = await context.octokit.rest.issues.createComment({
         owner, repo,
         issue_number: call.args.issue_number,
@@ -847,6 +853,7 @@ export async function executeTool(call, context, app, activityLog) {
   }
 
   if (Array.isArray(activityLog)) {
+    
     activityLog.push({
       tool: call.name,
       params: sanitizeForLog(call.args),

@@ -109,10 +109,9 @@ export async function saveContainerMap(containerMap) {
   await fs.writeFile(CONTAINERS_FILE, JSON.stringify(containerMap, null, 2), "utf-8");
 }
 
-// made ../ and not ./ because they're supposed to be read off boxy root not src
-export const NOTEBOOK_FILE = path.resolve("../boxy_notebook.json");
-export const STICKY_NOTES_FILE = path.resolve("../boxy_sticky_notes.json"); 
-export const TODO_LIST_FILE = path.resolve("../boxy_todo_list.json");
-export const REVIEWS_FILE = path.resolve("../boxy_reviews.json");
-export const REVERT_FILE = path.resolve("../boxy_revert_pending.json");
-export const CONTAINERS_FILE = path.resolve("../boxy_containers.json");
+export const NOTEBOOK_FILE = path.resolve("./boxy_notebook.json");
+export const STICKY_NOTES_FILE = path.resolve("./boxy_sticky_notes.json"); 
+export const TODO_LIST_FILE = path.resolve("./boxy_todo_list.json");
+export const REVIEWS_FILE = path.resolve("./boxy_reviews.json");
+export const REVERT_FILE = path.resolve("./boxy_revert_pending.json");
+export const CONTAINERS_FILE = path.resolve("./boxy_containers.json");
