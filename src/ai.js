@@ -4,6 +4,29 @@ import { OpenRouter } from "@openrouter/sdk";
 import Groq from "groq-sdk"; 
 import { convertContentsToMessages } from './review.js';
 
+function parseProviderList(value) {
+  return (value || "")
+    .split(",")
+    .map(entry => entry.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function providerMatches(provider, entry) {
+  return provider.name.toLowerCase() === entry || (provider.type || "").toLowerCase() === entry;
+}
+
+export function filterProviders(providers, { enabled, disabled } = {}) {
+  const allowList = parseProviderList(enabled !== undefined ? enabled : process.env.BOXY_ENABLED_PROVIDERS);
+  const denyList = parseProviderList(disabled !== undefined ? disabled : process.env.BOXY_DISABLED_PROVIDERS);
+
+  return providers.filter(provider => {
+    if (allowList.length > 0 && !allowList.some(entry => providerMatches(provider, entry))) {
+      return false;
+    }
+    return !denyList.some(entry => providerMatches(provider, entry));
+  });
+}
+
 export function throwIfEmptyModelResponse(text, providerName) {
   if (!text || !text.trim()) {
     throw new Error(`${providerName} returned an empty response`);
@@ -126,7 +149,17 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
 
   ];
   
-  const providersToUse = needsBigBrain ? bigBrainProviders : providers;
+  const allProviders = needsBigBrain ? bigBrainProviders : providers;
+  const providersToUse = filterProviders(allProviders);
+
+  const skippedCount = allProviders.length - providersToUse.length;
+  if (skippedCount > 0 && appLog) {
+    appLog.info(`Skipping ${skippedCount} provider(s) disabled by BOXY_ENABLED_PROVIDERS/BOXY_DISABLED_PROVIDERS`);
+  }
+
+  if (providersToUse.length === 0) {
+    throw new Error("No AI providers are enabled. Check BOXY_ENABLED_PROVIDERS / BOXY_DISABLED_PROVIDERS.");
+  }
 
   let lastError = null;
 
