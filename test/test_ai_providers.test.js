@@ -46,19 +46,28 @@ describe("filterProviders", () => {
   });
 
   test("falls back to env vars when no options are passed", () => {
-    const previous = process.env.BOXY_DISABLED_PROVIDERS;
+    const previousDisabled = process.env.BOXY_DISABLED_PROVIDERS;
+    const previousEnabled = process.env.BOXY_ENABLED_PROVIDERS;
     process.env.BOXY_DISABLED_PROVIDERS = "google,groq";
+    delete process.env.BOXY_ENABLED_PROVIDERS;
     try {
       assert.deepStrictEqual(names(filterProviders(providers)), [
         "pollinations-kimi-k3",
         "pollinations-gemma-4-31b-it"
       ]);
     } finally {
-      if (previous === undefined) {
+      if (previousDisabled === undefined) {
         delete process.env.BOXY_DISABLED_PROVIDERS;
       } else {
-        process.env.BOXY_DISABLED_PROVIDERS = previous;
+        process.env.BOXY_DISABLED_PROVIDERS = previousDisabled;
       }
+      if (previousEnabled === undefined) {
+        delete process.env.BOXY_ENABLED_PROVIDERS;
+      } else {
+        process.env.BOXY_ENABLED_PROVIDERS = previousEnabled;
+      }
+    }
+  });
     }
   });
 });
