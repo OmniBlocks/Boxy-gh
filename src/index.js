@@ -3,7 +3,7 @@ import { EventEmitter } from "events";
 import fs from "fs/promises";
 import { loadNotebook, loadTodoList, loadReviews, loadStickyNotes, REVERT_FILE } from "./fs.js";
 import { callAIWithFallback } from "./ai.js";
-import { executeTool, boxyWebhookTools, boxyBackgroundTools, prependActivityLog } from "./tools.js";
+import { executeTool, boxyWebhookTools, boxyBackgroundTools, prependActivityLog, stripActivityLog } from "./tools.js";
 import { triggerCodeReview, handleWorkflowCompleted, handleReviewCommentReply } from './review.js';
 const workflowEvents = new EventEmitter();
 
@@ -425,7 +425,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         : comments;
 
       for (const c of targetComments) {
-        conversationHistory += `[User: ${c.user.login} | ID: ${c.id}]: ${c.body}\n---\n`; 
+        conversationHistory += `[User: ${c.user.login} | ID: ${c.id}]: ${stripActivityLog(c.body)}\n---\n`;
       }
       let sayThingyThingy = "";
       if (isComment) {

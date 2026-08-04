@@ -406,6 +406,16 @@ export function prependActivityLog(body, activityLog) {
   return log ? log.trim() + "\n\n" + body : body;
 }
 
+const ACTIVITY_LOG_BLOCK = /<details>\s*<summary>[^<]*tool activity log[^<]*<\/summary>[\s\S]*?<\/details>\s*/gi;
+
+/**
+ * Boxy stop roleplaying!!
+ */
+export function stripActivityLog(body) {
+  if (typeof body !== "string" || body.length === 0) return body || "";
+  return body.replace(ACTIVITY_LOG_BLOCK, "").trim();
+}
+
 export async function webSearch(query) {
   const apiKey = process.env.TAVILY_API_KEY;
   if (!apiKey) {
@@ -552,7 +562,7 @@ export async function executeTool(call, context, app, activityLog) {
 
       let threadContent = `Title: ${targetIssue.data.title}\nState: ${targetIssue.data.state}\nAuthor: ${targetIssue.data.user?.login}\nBody:\n${targetIssue.data.body || "No description."}\n\n=== COMMENTS ===\n`;
       for (const c of targetComments.data) {
-        threadContent += `[${c.user.login}]: ${c.body}\n---\n`;
+        threadContent += `[${c.user.login}]: ${stripActivityLog(c.body)}\n---\n`;
       }
       const MAX_CHARS = 25000;
       toolResult = {
