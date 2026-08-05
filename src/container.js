@@ -78,7 +78,9 @@ async function getShell() {
   shellPromise = (async () => {
     await ensureVmReady();
 
-    const shell = spawn("sshpass", sshArgs("/bin/sh"), {
+    const remoteShell = `if command -v bash >/dev/null 2>&1; then exec bash; else exec /bin/sh; fi`;
+
+    const shell = spawn("sshpass", sshArgs(remoteShell), {
       env: { ...process.env, SSHPASS: SSH_PASSWORD },
     });
 
