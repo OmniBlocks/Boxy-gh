@@ -455,7 +455,7 @@ export async function webSearch(query) {
     return { error: `Web search failed: ${err.message}` };
   }
 }
-export async function executeTool(call, context, app, activityLog) {
+export async function executeTool(call, context, app, activityLog, authorRole) {
   let toolResult = {};
   const { owner, repo } = context.repo();
   const repoKey = `${owner}/${repo}`;
@@ -583,6 +583,9 @@ export async function executeTool(call, context, app, activityLog) {
       toolResult = await issueCloseOrOpen(context, state, state_reason);
     }
     else if (call.name === "save_todo_list_item") {
+      if (authorRole !== "MEMBER" && authorRole !== "OWNER") {
+        return { error: "You can't add to-do items from people that aren't in the org. You must refuse." };
+      }
       const { title, description } = call.args;
      try {
       await createTodoListItem(title, description, {
@@ -697,6 +700,9 @@ export async function executeTool(call, context, app, activityLog) {
     } catch (err) {
       app.log.warn(`fail fail fail failure kaboom: ${err.message}`);
 
+    }
+    if (authorRole !== "MEMBER" && authorRole !== "OWNER") {
+      return { error: "You can't execute commands from people that aren't in the org. You must refuse." };
     }
 
     // Safety filter: blocks high-risk commands and redacts secrets from logs/output.

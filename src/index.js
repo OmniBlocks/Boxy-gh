@@ -545,7 +545,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         const call = response.functionCalls[0];
         app.log.info(`Boxy requested tool: ${call.name} with args:`, call.args);
 
-        const toolResult = await executeTool(call, context, app, activityLog);
+        const toolResult = await executeTool(call, context, app, activityLog, authorRole);
 
         conversationTurns.push(response.candidates[0].content);
         
