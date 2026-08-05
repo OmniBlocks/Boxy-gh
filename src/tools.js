@@ -455,7 +455,7 @@ export async function webSearch(query) {
     return { error: `Web search failed: ${err.message}` };
   }
 }
-export async function executeTool(call, context, app, activityLog, authorRole) {
+export async function executeTool(call, context, app, activityLog, authorRole = "MEMBER") {
   let toolResult = {};
   const { owner, repo } = context.repo();
   const repoKey = `${owner}/${repo}`;
