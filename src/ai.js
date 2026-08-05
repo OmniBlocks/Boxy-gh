@@ -3,6 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 import { OpenRouter } from "@openrouter/sdk";
 import Groq from "groq-sdk"; 
 import { convertContentsToMessages } from './review.js';
+import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 
 function parseProviderList(value) {
   return (value || "")
@@ -204,7 +205,29 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
           thinkingConfig: {
             includeThoughts: true,
             thinkingLevel: thinkingLvl
-          }
+          },
+          safetySettings: [
+            {
+              category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+              threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+            },
+            {
+              category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+              threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+            },
+            {
+              category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+              threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+            },
+            {
+              category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+              threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+            },
+            {
+              category: HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY,
+              threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+            },
+          ],
         };
 
         // EXCEPTION FOR GOOGLE: Normalize history and ensure thought_signature exists on every tool call in history
