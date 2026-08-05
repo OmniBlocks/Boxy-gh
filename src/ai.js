@@ -105,6 +105,10 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
   // needs big brain is optional param for when stronk models for thinking reviews or smth
 
   const providers = [
+    { name: "novita-macaron-v1-venti", type: "novita", model: "mindai/macaron-v1-venti" },
+    { name: "novita-deepseek-v3.1", type: "novita", model: "deepseek/deepseek-v3.1" },
+    { name: "novita-glm-4.5", type: "novita", model: "zai-org/glm-4.5" },
+    { name: "novita-llama-3.3-70b", type: "novita", model: "meta-llama/llama-3.3-70b-instruct" },
     { name: "gemini-3.5-flash-lite", type: "google", model: "gemini-3.5-flash-lite", useBackup: false },
     { name: "gemini-3.1-flash-lite", type: "google", model: "gemini-3.1-flash-lite", useBackup: false },
     { name: "gemini-3.5-flash", type: "google", model: "gemini-3.5-flash", useBackup: false },
@@ -1043,6 +1047,124 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
 
         const elapsedSeconds = getElapsedSeconds(startTime);
         const formattedText = sanitizeModelCommentText(text, elapsedSeconds);
+        const contextParts = parts.map(part => (
+          part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
+        ));
+
+        return {
+          functionCalls,
+          candidates: [
+            {
+              content: {
+                role: "model",
+                parts: contextParts
+              },
+              finishReason: choice.finish_reason === "stop" ? "STOP" : (choice.finish_reason === "tool_calls" ? "STOP" : choice.finish_reason)
+            }
+          ],
+          text: formattedText
+        };
+      }
+
+      if (provider.type === "novita") {
+        if (!process.env.NOVITA_API_KEY) {
+          continue;
+        }
+
+        const messages = convertContentsToMessages(contents);
+        const body = {
+          model: provider.model,
+          messages: messages,
+          max_tokens: provider.maxTokens || 8192,
+          separate_reasoning: true
+        };
+
+        if (tools && tools.length > 0) {
+          body.tools = tools.map(t => {
+            const props = {};
+            for (const [k, v] of Object.entries(t.parameters?.properties || {})) {
+              props[k] = { ...v };
+              if (typeof props[k].type === 'string') {
+                props[k].type = props[k].type.toLowerCase();
+              }
+              if (props[k].items && typeof props[k].items.type === 'string') {
+                props[k].items = { ...props[k].items, type: props[k].items.type.toLowerCase() };
+              }
+            }
+            return {
+              type: "function",
+              function: {
+                name: t.name,
+                description: t.description || "",
+                parameters: {
+                  type: "object",
+                  properties: props,
+                  required: t.parameters?.required || []
+                }
+              }
+            };
+          });
+          body.tool_choice = "auto";
+        }
+
+        const headers = {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.NOVITA_API_KEY}`
+        };
+
+        const res = await fetch("https://api.novita.ai/openai/v1/chat/completions", {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body)
+        });
+
+        if (!res.ok) {
+          throw new Error(`Novita Status ${res.status}: ${await res.text()}`);
+        }
+
+        const data = await res.json();
+        const choice = data.choices?.[0];
+        const message = choice?.message;
+
+        if (!message) {
+          throw new Error("Empty choice content received from Novita");
+        }
+
+        const text = message.content || "";
+        const reasoning = message.reasoning_content || null;
+        const functionCalls = [];
+        const parts = [];
+
+        if (message.tool_calls && message.tool_calls.length > 0) {
+          for (const tc of message.tool_calls) {
+            if (tc.type === "function") {
+              let parsedArgs = {};
+              try {
+                parsedArgs = typeof tc.function.arguments === "string"
+                  ? JSON.parse(tc.function.arguments)
+                  : tc.function.arguments;
+              } catch (e) {
+                parsedArgs = tc.function.arguments;
+              }
+              const fc = {
+                name: tc.function.name,
+                args: parsedArgs,
+                id: tc.id
+              };
+              functionCalls.push(fc);
+              parts.push({ functionCall: fc });
+            }
+          }
+        } else {
+          parts.push({ text });
+        }
+
+        if (functionCalls.length === 0) {
+          throwIfEmptyModelResponse(text, `Novita provider ${provider.name}`);
+        }
+
+        const elapsedSeconds = getElapsedSeconds(startTime);
+        const formattedText = sanitizeModelCommentText(text, elapsedSeconds, reasoning);
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
