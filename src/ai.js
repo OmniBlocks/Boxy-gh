@@ -370,7 +370,8 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         const text = message.content || "";
         throwIfEmptyModelResponse(text, `Cerebras provider ${provider.name}`);
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const formattedText = sanitizeModelCommentText(text, elapsedSeconds);
+        const modelName = provider.model;
+        const formattedText = `${sanitizeModelCommentText(text, elapsedSeconds)}\n\n---\n*Current model identification: ${modelName}*`;
 
         const contextText = stripReasoningArtifacts(text);
 
@@ -472,7 +473,8 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const formattedText = sanitizeModelCommentText(text, elapsedSeconds);
+        const modelName = provider.model;
+        const formattedText = `${sanitizeModelCommentText(text, elapsedSeconds)}\n\n---\n*Current model identification: ${modelName}*`;
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
@@ -592,7 +594,8 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const formattedText = sanitizeModelCommentText(text, elapsedSeconds);
+        const modelName = provider.model;
+        const formattedText = `${sanitizeModelCommentText(text, elapsedSeconds)}\n\n---\n*Current model identification: ${modelName}*`;
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
@@ -708,7 +711,8 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const formattedText = sanitizeModelCommentText(text, elapsedSeconds);
+        const modelName = provider.model;
+        const formattedText = `${sanitizeModelCommentText(text, elapsedSeconds)}\n\n---\n*Current model identification: ${modelName}*`;
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
@@ -816,7 +820,8 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const formattedText = sanitizeModelCommentText(text, elapsedSeconds);
+        const modelName = provider.model;
+        const formattedText = `${sanitizeModelCommentText(text, elapsedSeconds)}\n\n---\n*Current model identification: ${modelName}*`;
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
@@ -931,7 +936,8 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const formattedText = sanitizeModelCommentText(text, elapsedSeconds);
+        const modelName = provider.model;
+        const formattedText = `${sanitizeModelCommentText(text, elapsedSeconds)}\n\n---\n*Current model identification: ${modelName}*`;
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
@@ -1046,7 +1052,8 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const formattedText = sanitizeModelCommentText(text, elapsedSeconds);
+        const modelName = provider.model;
+        const formattedText = `${sanitizeModelCommentText(text, elapsedSeconds)}\n\n---\n*Current model identification: ${modelName}*`;
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
@@ -1280,7 +1287,8 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const formattedText = sanitizeModelCommentText(text, elapsedSeconds);
+        const modelName = provider.model;
+        const formattedText = `${sanitizeModelCommentText(text, elapsedSeconds)}\n\n---\n*Current model identification: ${modelName}*`;
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
