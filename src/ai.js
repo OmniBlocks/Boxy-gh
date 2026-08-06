@@ -132,13 +132,13 @@ export function appendModelIdentification(text, model, usage) {
 export async function callAIWithFallback({ contents, tools, appLog, needsBigBrain = false }) {
   // needs big brain is optional param for when stronk models for thinking reviews or smth
 
-  const providers = [
+  const providers = [    
+    { name: "gemini-3.5-flash-lite", type: "google", model: "gemini-3.5-flash-lite", useBackup: false },
     { name: "novita-macaron-v1-venti", type: "novita", model: "mindai/macaron-v1-venti" },
     { name: "novita-macaron-v1-tall", type: "novita", model: "mindai/macaron-v1-tall" },
     { name: "novita-deepseek-v3.1", type: "novita", model: "deepseek/deepseek-v3.1" },
     { name: "novita-glm-4.5", type: "novita", model: "zai-org/glm-4.5" },
     { name: "novita-llama-3.3-70b", type: "novita", model: "meta-llama/llama-3.3-70b-instruct" },
-    { name: "gemini-3.5-flash-lite", type: "google", model: "gemini-3.5-flash-lite", useBackup: false },
     { name: "gemini-3.1-flash-lite", type: "google", model: "gemini-3.1-flash-lite", useBackup: false },
     { name: "gemini-3.5-flash", type: "google", model: "gemini-3.5-flash", useBackup: false },
     { name: "gemma-4-26b-a4b-it", type: "google", model: "gemma-4-26b-a4b-it", useBackup: false },
@@ -227,9 +227,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
         let thinkingLvl = "minimal";
 
-        if (needsBigBrain || provider.model.startsWith("gemma")) {
-          thinkingLvl = "high";
-        }
+       
         const config = {
           tools: toolList,
           toolConfig: {
@@ -1336,7 +1334,12 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
       lastError = err;
 
       if (err.message?.includes("429") || err.message?.includes("RESOURCE_EXHAUSTED")) {
+        const nextProvider = providers[i + 1];
+        if (provider.type === nextProvider?.type) {
+          // we only want to wait if the next provider is the same type, otherwise it's not like we're spamming the api,
+          // meaning we can skip and try the other provider immediately
         await new Promise(resolve => setTimeout(resolve, 5000));
+        }
       }
     }
   }
