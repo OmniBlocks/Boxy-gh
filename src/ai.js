@@ -1334,7 +1334,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
       lastError = err;
 
       if (err.message?.includes("429") || err.message?.includes("RESOURCE_EXHAUSTED")) {
-        const nextProvider = providers[i + 1];
+        const nextProvider = providers[providers.indexOf(provider) + 1];
         if (provider.type === nextProvider?.type) {
           // we only want to wait if the next provider is the same type, otherwise it's not like we're spamming the api,
           // meaning we can skip and try the other provider immediately
