@@ -601,11 +601,11 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model);
+        const formattedText = sanitizeModelCommentText(text, elapsedSeconds);
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
-        const textWithHeader = `${formattedText}\n\n*<sub>Used ${provider.name}</sub>*`;
+        const textWithHeader = appendModelIdentification(`${formattedText}\n\n*<sub>Used ${provider.name}</sub>*`, provider.model);
 
         return {
           functionCalls,
@@ -1289,11 +1289,11 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model);
+        const formattedText = sanitizeModelCommentText(text, elapsedSeconds);
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
-        const textWithHeader = `${formattedText}\n\n*<sub>Used ${provider.name}</sub>*`;
+        const textWithHeader = appendModelIdentification(`${formattedText}\n\n*<sub>Used ${provider.name}</sub>*`, provider.model);
 
         return {
           functionCalls,
