@@ -106,6 +106,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
 
   const providers = [
     { name: "novita-macaron-v1-venti", type: "novita", model: "mindai/macaron-v1-venti" },
+    { name: "novita-macaron-v1-tall", type: "novita", model: "mindai/macaron-v1-tall" },
     { name: "novita-deepseek-v3.1", type: "novita", model: "deepseek/deepseek-v3.1" },
     { name: "novita-glm-4.5", type: "novita", model: "zai-org/glm-4.5" },
     { name: "novita-llama-3.3-70b", type: "novita", model: "meta-llama/llama-3.3-70b-instruct" },
