@@ -3,6 +3,7 @@ import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { OpenRouter } from "@openrouter/sdk";
 import Groq from "groq-sdk"; 
 import { convertContentsToMessages } from './review.js';
+import { buildRunDetailsBlock, formatTokenUsage, formatModelIdentification } from './comment_format.js';
 
 
 function parseProviderList(value) {
@@ -65,7 +66,7 @@ export function sanitizeModelCommentText(text, elapsedSeconds, explicitReasoning
   }
 
   const reasoningBlock = escapeHtml(extractedReasoning.trim() || "No reasoning.");
-  const details = `<details><summary>Thought for ${elapsedSeconds} seconds</summary>\n\n<pre>${reasoningBlock}</pre>\n\n</details>`;
+  const details = `<details>\n<summary>💭 Thought for ${elapsedSeconds} seconds</summary>\n\n<pre>${reasoningBlock}</pre>\n\n</details>`;
 
   return cleanedText ? `${details}\n\n${cleanedText}` : details;
 }
@@ -97,17 +98,36 @@ export function formatGoogleCommentText(parts, elapsedSeconds) {
   }
 
   const reasoningBlock = escapeHtml(thoughtTexts.join("\n\n") || "No reasoning.");
-  const details = `<details><summary>Thought for ${elapsedSeconds} seconds</summary>\n\n<pre>${reasoningBlock}</pre>\n\n</details>`;
+  const details = `<details>\n<summary>💭 Thought for ${elapsedSeconds} seconds</summary>\n\n<pre>${reasoningBlock}</pre>\n\n</details>`;
 
   return answerText ? `${details}\n\n${answerText}` : details;
 }
-export function appendModelIdentification(text, model) {
-  const body = (text || "").trim();
-  if (!body || !model) {
+const REASONING_DETAILS_BLOCK = /^<details>\s*<summary>[^<]*Thought for [^<]*<\/summary>[\s\S]*?<\/details>\s*/;
+
+/**
+ * Appends Boxy's model ID
+ */
+export function appendModelIdentification(text, model, usage) {
+  let body = (text || "").trim();
+
+  let reasoning = "";
+  const reasoningMatch = body.match(REASONING_DETAILS_BLOCK);
+  if (reasoningMatch) {
+    reasoning = reasoningMatch[0].trim();
+    body = body.slice(reasoningMatch[0].length).trim();
+  }
+
+  const runDetails = buildRunDetailsBlock([
+    reasoning,
+    formatTokenUsage(usage),
+    formatModelIdentification(model)
+  ]);
+
+  if (!runDetails) {
     return body;
   }
 
-  return `${body}\n\n---\n*Current model identification: ${model}*`;
+  return body ? `${runDetails}\n\n${body}` : runDetails;
 }
 export async function callAIWithFallback({ contents, tools, appLog, needsBigBrain = false }) {
   // needs big brain is optional param for when stronk models for thinking reviews or smth
@@ -341,7 +361,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const formattedText = appendModelIdentification(formatGoogleCommentText(parts, elapsedSeconds), provider.model);
+        const formattedText = appendModelIdentification(formatGoogleCommentText(parts, elapsedSeconds), provider.model, response.usageMetadata);
 
         return {
           functionCalls,
@@ -379,7 +399,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         const text = message.content || "";
         throwIfEmptyModelResponse(text, `Cerebras provider ${provider.name}`);
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model);
+        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model, response.usage);
 
         const contextText = stripReasoningArtifacts(text);
 
@@ -481,7 +501,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model);
+        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model, response.usage);
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
@@ -605,7 +625,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
-        const textWithHeader = appendModelIdentification(`${formattedText}\n\n*<sub>Used ${provider.name}</sub>*`, provider.model);
+        const textWithHeader = appendModelIdentification(`${formattedText}\n\n*<sub>Used ${provider.name}</sub>*`, provider.model, data.usage);
 
         return {
           functionCalls,
@@ -717,7 +737,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model);
+        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model, data.usage);
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
@@ -825,7 +845,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model);
+        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model, response.usage);
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
@@ -940,7 +960,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model);
+        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model, data.usage);
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
@@ -1055,7 +1075,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model);
+        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model, data.usage);
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
@@ -1173,7 +1193,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds, reasoning), provider.model);
+        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds, reasoning), provider.model, data.usage);
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
@@ -1293,7 +1313,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
-        const textWithHeader = appendModelIdentification(`${formattedText}\n\n*<sub>Used ${provider.name}</sub>*`, provider.model);
+        const textWithHeader = appendModelIdentification(`${formattedText}\n\n*<sub>Used ${provider.name}</sub>*`, provider.model, data.usage);
 
         return {
           functionCalls,

@@ -3,6 +3,7 @@ import { labelIssue, issueCloseOrOpen } from "./index.js";
 import { loadNotebook, saveMemoryToFile, saveStickyNoteToFile, createTodoListItem, loadTodoList, saveTodoList, loadReviews, saveReviews } from "./fs.js";
 import { runCommandInBoxyContainer, sendStdinToBoxyContainer, waitCommandInBoxyContainer, killCommandInBoxyContainer, editFileInBoxyContainer } from "./container.js";
 import { executeSafely, redactSecrets } from "./safety_filter.js";
+import { buildRunDetailsBlock, insertRunDetailsSection, stripEmptyRunDetailsBlock } from "./comment_format.js";
 
 
 const readMemoryDeclaration = {
@@ -395,15 +396,21 @@ export function formatActivityLog(activityLog) {
     `**${i + 1}. \`${entry.tool}\`**\n\nParams:\n\`\`\`json\n${entry.params}\n\`\`\`\n\nOutput:\n\`\`\`json\n${entry.output}\n\`\`\``
   ).join("\n\n---\n\n");
 
-  return `\n\n<details>\n<summary>🔧 My tool activity log (${activityLog.length} call${activityLog.length === 1 ? "" : "s"})</summary>\n\n${entries}\n\n</details>`;
+  return `<details>\n<summary>🔧 My tool activity log (${activityLog.length} call${activityLog.length === 1 ? "" : "s"})</summary>\n\n${entries}\n\n</details>`;
 }
 
 /**
- * Puts the tool activity log at the top of the comment body
+ * Slots the tool activity log into the shared run details block at the top of
+ * the comment.
  */
 export function prependActivityLog(body, activityLog) {
   const log = formatActivityLog(activityLog);
-  return log ? log.trim() + "\n\n" + body : body;
+  if (!log) return body;
+
+  const nested = insertRunDetailsSection(body, log);
+  if (nested) return nested;
+
+  return buildRunDetailsBlock([log]) + "\n\n" + body;
 }
 
 const ACTIVITY_LOG_BLOCK = /<details>\s*<summary>[^<]*tool activity log[^<]*<\/summary>[\s\S]*?<\/details>\s*/gi;
@@ -413,7 +420,7 @@ const ACTIVITY_LOG_BLOCK = /<details>\s*<summary>[^<]*tool activity log[^<]*<\/s
  */
 export function stripActivityLog(body) {
   if (typeof body !== "string" || body.length === 0) return body || "";
-  return body.replace(ACTIVITY_LOG_BLOCK, "").trim();
+  return stripEmptyRunDetailsBlock(body.replace(ACTIVITY_LOG_BLOCK, "")).trim();
 }
 
 export async function webSearch(query) {
