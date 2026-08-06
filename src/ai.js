@@ -101,6 +101,14 @@ export function formatGoogleCommentText(parts, elapsedSeconds) {
 
   return answerText ? `${details}\n\n${answerText}` : details;
 }
+export function appendModelIdentification(text, model) {
+  const body = (text || "").trim();
+  if (!body || !model) {
+    return body;
+  }
+
+  return `${body}\n\n---\n*Current model identification: ${model}*`;
+}
 export async function callAIWithFallback({ contents, tools, appLog, needsBigBrain = false }) {
   // needs big brain is optional param for when stronk models for thinking reviews or smth
 
@@ -333,7 +341,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const formattedText = formatGoogleCommentText(parts, elapsedSeconds);
+        const formattedText = appendModelIdentification(formatGoogleCommentText(parts, elapsedSeconds), provider.model);
 
         return {
           functionCalls,
@@ -371,8 +379,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         const text = message.content || "";
         throwIfEmptyModelResponse(text, `Cerebras provider ${provider.name}`);
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const modelName = provider.model;
-        const formattedText = `${sanitizeModelCommentText(text, elapsedSeconds)}\n\n---\n*Current model identification: ${modelName}*`;
+        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model);
 
         const contextText = stripReasoningArtifacts(text);
 
@@ -474,8 +481,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const modelName = provider.model;
-        const formattedText = `${sanitizeModelCommentText(text, elapsedSeconds)}\n\n---\n*Current model identification: ${modelName}*`;
+        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model);
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
@@ -595,8 +601,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const modelName = provider.model;
-        const formattedText = `${sanitizeModelCommentText(text, elapsedSeconds)}\n\n---\n*Current model identification: ${modelName}*`;
+        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model);
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
@@ -712,8 +717,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const modelName = provider.model;
-        const formattedText = `${sanitizeModelCommentText(text, elapsedSeconds)}\n\n---\n*Current model identification: ${modelName}*`;
+        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model);
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
@@ -821,8 +825,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const modelName = provider.model;
-        const formattedText = `${sanitizeModelCommentText(text, elapsedSeconds)}\n\n---\n*Current model identification: ${modelName}*`;
+        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model);
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
@@ -937,8 +940,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const modelName = provider.model;
-        const formattedText = `${sanitizeModelCommentText(text, elapsedSeconds)}\n\n---\n*Current model identification: ${modelName}*`;
+        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model);
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
@@ -1053,8 +1055,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const modelName = provider.model;
-        const formattedText = `${sanitizeModelCommentText(text, elapsedSeconds)}\n\n---\n*Current model identification: ${modelName}*`;
+        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model);
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
@@ -1172,7 +1173,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const formattedText = sanitizeModelCommentText(text, elapsedSeconds, reasoning);
+        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds, reasoning), provider.model);
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
@@ -1288,8 +1289,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const modelName = provider.model;
-        const formattedText = `${sanitizeModelCommentText(text, elapsedSeconds)}\n\n---\n*Current model identification: ${modelName}*`;
+        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model);
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
