@@ -4,6 +4,8 @@ import { loadNotebook, saveMemoryToFile, saveStickyNoteToFile, createTodoListIte
 import { runCommandInBoxyContainer, sendStdinToBoxyContainer, waitCommandInBoxyContainer, killCommandInBoxyContainer, editFileInBoxyContainer } from "./container.js";
 import { executeSafely, redactSecrets } from "./safety_filter.js";
 import { buildRunDetailsBlock, insertRunDetailsSection, stripRunDetailsBlock } from "./comment_format.js";
+import { can, describeDenial } from "./permissions.js";
+import { findUnbackedClaims, formatUnbackedClaimNote } from "./claims.js";
 
 
 const readMemoryDeclaration = {
@@ -275,6 +277,25 @@ const createPullRequestDeclaration = {
     required: ["title", "head", "body"],
   },
 };
+const createIssueDeclaration = {
+  name: "create_issue",
+  description: "File a real issue on GitHub. This calls the GitHub API directly, so what it returns is the true, authoritative outcome: a real issue number and URL on success, or the exact GitHub error on failure. Do NOT use 'gh issue create' inside execute_command to file an issue, and NEVER tell anyone an issue was filed based on shell output or on your intention to file one. Only report an issue as filed if this tool returns status 'success'. Defaults to the repository this conversation is in; pass 'owner' and 'repo' to file somewhere else, and only do that when someone has actually asked you to.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      title: { type: Type.STRING, description: "The issue title." },
+      body: { type: Type.STRING, description: "The issue description. Follow the repo's policy on suggested fixes: if in doubt, describe the bug and how to reproduce it, and leave the fix to a human." },
+      owner: { type: Type.STRING, description: "Optional. The owner of the repo to file in. Defaults to the current repo's owner." },
+      repo: { type: Type.STRING, description: "Optional. The repo to file in. Defaults to the current repo." },
+      labels: {
+        type: Type.ARRAY,
+        description: "Optional. Labels to apply. Only use labels you know already exist on the target repo.",
+        items: { type: Type.STRING }
+      }
+    },
+    required: ["title", "body"],
+  },
+};
 const reactCommentDeclaration = {
   name: "react_comment",
   description: "React to an issue comment.",
@@ -345,6 +366,7 @@ export const boxyWebhookTools = [
   executeCommandDeclaration,
   editFileDeclaration,
   createPullRequestDeclaration,
+  createIssueDeclaration,
   sendStdinDeclaration,
   waitCommandDeclaration,
   killCommandDeclaration,
@@ -365,6 +387,7 @@ export const boxyBackgroundTools = [
   executeCommandDeclaration,
   editFileDeclaration,
   createPullRequestDeclaration,
+  createIssueDeclaration,
   sendStdinDeclaration,
   waitCommandDeclaration,
   killCommandDeclaration,
@@ -594,23 +617,23 @@ export async function executeTool(call, context, app, activityLog, authorRole = 
       toolResult = await issueCloseOrOpen(context, state, state_reason);
     }
     else if (call.name === "save_todo_list_item") {
-      if (authorRole !== "MEMBER" && authorRole !== "OWNER") {
-        return { error: "You can't add to-do items from people that aren't in the org. You must refuse." };
+      if (!can(authorRole, "queueTasks")) {
+        toolResult = { error: describeDenial("queueTasks", authorRole) };
+      } else {
+        const { title, description } = call.args;
+        try {
+          await createTodoListItem(title, description, {
+            sourceRepoOwner: context.repo().owner,
+            sourceRepoName: context.repo().repo,
+            sourceIssueNumber: context.payload.issue?.number || context.payload.pull_request?.number || null,
+            sourceInstallationId: context.payload.installation?.id || null
+          });
+          toolResult = { status: "success", message: `To-do item '${title}' added.` };
+        } catch (e) {
+          console.error(e);
+          toolResult = { error: `The to-do item was NOT saved: ${e.message}. Do not tell anyone it was.` };
+        }
       }
-      const { title, description } = call.args;
-     try {
-      await createTodoListItem(title, description, {
-        sourceRepoOwner: context.repo().owner,
-        sourceRepoName: context.repo().repo,
-        sourceIssueNumber: context.payload.issue?.number || context.payload.pull_request?.number || null,
-        sourceInstallationId: context.payload.installation?.id || null
-      });
-     } catch (e) {
-      console.error(e);
-      toolResult = { status: "error", message: e.message };
-      return;
-     }
-      toolResult = { status: "success", message: `To-do item '${title}' added.` };
     }
 
     else if (call.name === "complete_todo_list_item") {
@@ -624,13 +647,18 @@ export async function executeTool(call, context, app, activityLog, authorRole = 
       }
     }
     else if (call.name === "create_comment") {
-      app.log.info(`Boxy creating comment on issue #${call.args.issue_number}: ${call.args.body}`);
-      const { data } = await context.octokit.rest.issues.createComment({
-        owner, repo,
-        issue_number: call.args.issue_number,
-        body: call.args.body
-      });
-      toolResult = { status: "success", comment_url: data.html_url };
+      const unbacked = findUnbackedClaims(stripRunDetails(call.args.body || ""), activityLog);
+      if (unbacked.length > 0) {
+        toolResult = { error: `The comment was NOT posted. ${formatUnbackedClaimNote(unbacked)}` };
+      } else {
+        app.log.info(`Boxy creating comment on issue #${call.args.issue_number}: ${call.args.body}`);
+        const { data } = await context.octokit.rest.issues.createComment({
+          owner, repo,
+          issue_number: call.args.issue_number,
+          body: call.args.body
+        });
+        toolResult = { status: "success", comment_url: data.html_url };
+      }
     }
   else if (call.name === "get_pr_diff") {
       const files = await context.octokit.paginate(context.octokit.rest.pulls.listFiles, {
@@ -704,24 +732,26 @@ export async function executeTool(call, context, app, activityLog, authorRole = 
       } catch (error) {
       app.log.info("hurray");
       }
-      let token = null;
-    try {
-      const auth = await context.octokit.auth({ type: "installation" });
-      token = auth.token;
-    } catch (err) {
-      app.log.warn(`fail fail fail failure kaboom: ${err.message}`);
+      if (!can(authorRole, "runCommands")) {
+        toolResult = { error: describeDenial("runCommands", authorRole) };
+      } else {
+        let token = null;
+        if (can(authorRole, "useRepoCredentials")) {
+          try {
+            const auth = await context.octokit.auth({ type: "installation" });
+            token = auth.token;
+          } catch (err) {
+            app.log.warn(`fail fail fail failure kaboom: ${err.message}`);
+          }
+        }
 
-    }
-    if (authorRole !== "MEMBER" && authorRole !== "OWNER") {
-      return { error: "You can't execute commands from people that aren't in the org. You must refuse." };
-    }
-
-    // Safety filter: blocks high-risk commands and redacts secrets from logs/output.
-    toolResult = await executeSafely(
-      call.args.command,
-      (command) => runCommandInBoxyContainer(command, isBoxyWebhook, token),
-      app.log
-    );
+        // Safety filter: blocks high-risk commands and redacts secrets from logs/output.
+        toolResult = await executeSafely(
+          call.args.command,
+          (command) => runCommandInBoxyContainer(command, isBoxyWebhook, token),
+          app.log
+        );
+      }
     }
     else if (call.name === "edit_file") {
       app.log.info(`Boxy editing file: ${call.args.path}`);
@@ -759,6 +789,39 @@ export async function executeTool(call, context, app, activityLog, authorRole = 
           status: "failed",
           error: `GitHub rejected this pull request (head='${head}', base='${base}' on ${owner}/${repo}): ${err.message}${apiErrors ? " - " + apiErrors : ""}. The PR was NOT created. Do not tell anyone it was submitted. Common causes: the branch wasn't actually pushed to this repo, there are no commits between base and head, or a PR already exists for this branch.`
         };
+      }
+    }
+    else if (call.name === "create_issue") {
+      if (!can(authorRole, "fileIssues")) {
+        toolResult = { error: describeDenial("fileIssues", authorRole) };
+      } else {
+        const targetOwner = call.args.owner || owner;
+        const targetRepo = call.args.repo || repo;
+        const { title, body, labels } = call.args;
+
+        try {
+          const { data } = await context.octokit.rest.issues.create({
+            owner: targetOwner,
+            repo: targetRepo,
+            title,
+            body,
+            ...(Array.isArray(labels) && labels.length > 0 ? { labels } : {})
+          });
+          app.log.info(`Boxy filed issue #${data.number} on ${targetOwner}/${targetRepo}: ${data.html_url}`);
+          toolResult = {
+            status: "success",
+            issue_number: data.number,
+            issue_url: data.html_url,
+            message: `Issue #${data.number} was actually filed on ${targetOwner}/${targetRepo}: ${data.html_url}. This is confirmed by the GitHub API, not a guess.`
+          };
+        } catch (err) {
+          const apiErrors = err.response?.data?.errors ? JSON.stringify(err.response.data.errors) : null;
+          app.log.warn(`Boxy failed to file an issue on ${targetOwner}/${targetRepo}: ${err.message}`);
+          toolResult = {
+            status: "failed",
+            error: `GitHub rejected this issue on ${targetOwner}/${targetRepo}: ${err.message}${apiErrors ? " - " + apiErrors : ""}. The issue was NOT filed. Do not tell anyone it was. Common causes: issues are disabled on that repo, a label doesn't exist there, or you don't have access to it.`
+          };
+        }
       }
     }
     else if (call.name === "send_stdin") {
@@ -851,11 +914,12 @@ export async function executeTool(call, context, app, activityLog, authorRole = 
   }
 
   if (Array.isArray(activityLog)) {
-    
+
     activityLog.push({
       tool: call.name,
       params: sanitizeForLog(call.args),
       output: sanitizeForLog(toolResult),
+      ok: !(toolResult && (toolResult.error || toolResult.status === "failed" || toolResult.blocked)),
     });
   }
 
