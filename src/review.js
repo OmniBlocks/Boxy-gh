@@ -1,7 +1,7 @@
 import AdmZip from 'adm-zip';
 import { callAIWithFallback } from './ai.js';
 import { loadReviews, saveReviews, loadNotebook, loadTodoList, loadStickyNotes } from './fs.js';
-import { boxyReviewTools, executeTool, boxyWebhookTools, prependActivityLog, stripActivityLog } from './tools.js';
+import { boxyReviewTools, executeTool, boxyWebhookTools, prependActivityLog, stripRunDetails } from './tools.js';
 
 export async function triggerCodeReview(context, app) {
   let pr;
@@ -147,7 +147,7 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
   allComments.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
   let prDescriptionText = `Title: ${prDescription.data.title}\nState: ${prDescription.data.state}\nAuthor: ${prDescription.data.user?.login}\nBody:\n${prDescription.data.body || "No description."}\n\n=== COMMENTS ===\n`;
   prDescriptionText += allComments.length > 0
-    ? allComments.map(c => `[${c.path ? `File: ${c.path} | Line: ${c.line} | ` : ""}User: ${c.user?.login}]: ${stripActivityLog(c.body)}`).join("\n---\n")
+    ? allComments.map(c => `[${c.path ? `File: ${c.path} | Line: ${c.line} | ` : ""}User: ${c.user?.login}]: ${stripRunDetails(c.body)}`).join("\n---\n")
     : "No comments yet.";
   prDescriptionText += "\n\n=== PREVIOUS FORMAL REVIEWS (submitted verdicts, e.g. via finish_pr_review) ===\n";
   const submittedReviews = formalReviews.filter(r => r.state !== "PENDING");
@@ -319,7 +319,7 @@ export async function handleReviewCommentReply(context, app) {
     const otherReviewComments = reviewComments.filter(c => c.id !== parentId && c.in_reply_to_id !== parentId);
     if (otherReviewComments.length > 0) {
       for (const c of otherReviewComments) {
-        conversationHistory += `[File: ${c.path} | Line: ${c.line} | User: ${c.user?.login}]: ${stripActivityLog(c.body)}\n---\n`;
+        conversationHistory += `[File: ${c.path} | Line: ${c.line} | User: ${c.user?.login}]: ${stripRunDetails(c.body)}\n---\n`;
       }
     } else {
       conversationHistory += "No other inline review comments.\n";
@@ -328,7 +328,7 @@ export async function handleReviewCommentReply(context, app) {
 
     conversationHistory += `=== NORMAL PR DISCUSSION COMMENTS (NOT INLINE) ===\n`;
     for (const c of normalIssueComments) {
-      conversationHistory += `[User: ${c.user.login}]: ${stripActivityLog(c.body)}\n---\n`;
+      conversationHistory += `[User: ${c.user.login}]: ${stripRunDetails(c.body)}\n---\n`;
     }
     conversationHistory += "\n";
 
@@ -344,7 +344,7 @@ export async function handleReviewCommentReply(context, app) {
     conversationHistory += "\n";
 
     conversationHistory += `=== CURRENT INLINE REVIEW THREAD (THE MAIN THREAD YOU ARE REPLYING TO) ===\n`;
-    conversationHistory += thread.map(c => `[${c.user.login}]: ${stripActivityLog(c.body)}`).join("\n---\n") + "\n\n";
+    conversationHistory += thread.map(c => `[${c.user.login}]: ${stripRunDetails(c.body)}`).join("\n---\n") + "\n\n";
 
     conversationHistory += `\n Triggered by: ${author} repo role: (${authorRole}) in a reply to an inline PR review comment.\n\n`;
 

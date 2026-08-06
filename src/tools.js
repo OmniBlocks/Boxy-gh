@@ -3,7 +3,7 @@ import { labelIssue, issueCloseOrOpen } from "./index.js";
 import { loadNotebook, saveMemoryToFile, saveStickyNoteToFile, createTodoListItem, loadTodoList, saveTodoList, loadReviews, saveReviews } from "./fs.js";
 import { runCommandInBoxyContainer, sendStdinToBoxyContainer, waitCommandInBoxyContainer, killCommandInBoxyContainer, editFileInBoxyContainer } from "./container.js";
 import { executeSafely, redactSecrets } from "./safety_filter.js";
-import { buildRunDetailsBlock, insertRunDetailsSection, stripEmptyRunDetailsBlock } from "./comment_format.js";
+import { buildRunDetailsBlock, insertRunDetailsSection, stripRunDetailsBlock } from "./comment_format.js";
 
 
 const readMemoryDeclaration = {
@@ -417,10 +417,14 @@ const ACTIVITY_LOG_BLOCK = /<details>\s*<summary>[^<]*tool activity log[^<]*<\/s
 
 /**
  * Boxy stop roleplaying!!
+ *
+ * Strips the run details block Boxy appends to its own comments before that
+ * comment is fed back to it as history. The trailing regex is for legacy
+ * comments whose activity log predates the run details wrapper.
  */
-export function stripActivityLog(body) {
+export function stripRunDetails(body) {
   if (typeof body !== "string" || body.length === 0) return body || "";
-  return stripEmptyRunDetailsBlock(body.replace(ACTIVITY_LOG_BLOCK, "")).trim();
+  return stripRunDetailsBlock(body).replace(ACTIVITY_LOG_BLOCK, "").trim();
 }
 
 export async function webSearch(query) {
@@ -569,7 +573,7 @@ export async function executeTool(call, context, app, activityLog, authorRole = 
 
       let threadContent = `Title: ${targetIssue.data.title}\nState: ${targetIssue.data.state}\nAuthor: ${targetIssue.data.user?.login}\nBody:\n${targetIssue.data.body || "No description."}\n\n=== COMMENTS ===\n`;
       for (const c of targetComments.data) {
-        threadContent += `[${c.user.login}]: ${stripActivityLog(c.body)}\n---\n`;
+        threadContent += `[${c.user.login}]: ${stripRunDetails(c.body)}\n---\n`;
       }
       const MAX_CHARS = 25000;
       toolResult = {

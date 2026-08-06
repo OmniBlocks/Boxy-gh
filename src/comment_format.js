@@ -22,18 +22,37 @@ export function insertRunDetailsSection(body, section) {
   return text.replace(RUN_DETAILS_MARKER, `${RUN_DETAILS_MARKER}\n\n${nested}`);
 }
 
-const EMPTY_RUN_DETAILS_BLOCK = new RegExp(
-  `<details>\\s*<summary>${RUN_DETAILS_SUMMARY}</summary>\\s*${RUN_DETAILS_MARKER}\\s*</details>\\s*`,
-  "g"
-);
+const DETAILS_TAG = /<\/?details\b[^>]*>/gi;
 
-/**
- * Drops a run details block that has nothing left inside it, which happens once
- * the tool activity log is stripped out of a comment that carried nothing else.
- */
-export function stripEmptyRunDetailsBlock(body) {
-  if (typeof body !== "string" || body.length === 0) return body || "";
-  return body.replace(EMPTY_RUN_DETAILS_BLOCK, "");
+function findDetailsClose(text, start) {
+  DETAILS_TAG.lastIndex = start;
+  let depth = 0;
+  let match;
+
+  while ((match = DETAILS_TAG.exec(text)) !== null) {
+    depth += match[0][1] === "/" ? -1 : 1;
+    if (depth === 0) return match.index + match[0].length;
+  }
+
+  return -1;
+}
+
+export function stripRunDetailsBlock(body) {
+  let text = typeof body === "string" ? body : "";
+
+  for (let marker = text.indexOf(RUN_DETAILS_MARKER); marker !== -1; marker = text.indexOf(RUN_DETAILS_MARKER)) {
+    const start = text.lastIndexOf("<details", marker);
+    const end = start === -1 ? -1 : findDetailsClose(text, start);
+
+    if (end === -1) {
+      text = text.slice(0, marker) + text.slice(marker + RUN_DETAILS_MARKER.length);
+      continue;
+    }
+
+    text = text.slice(0, start) + text.slice(end);
+  }
+
+  return text.replace(/\n{3,}/g, "\n\n");
 }
 
 function formatTokenCount(value) {
