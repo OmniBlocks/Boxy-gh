@@ -373,12 +373,12 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
     
     let left = Math.floor(Math.random() * 30) + 1;
     let funni = [`${left} left.`, `Determination.`, `Try again later`, `The consequences of your actions.`, `Try again in ${left} minutes.`, `Don't try again.`, `There's still time to delete this.`, `Wake up.`, `!!!!!!!!!!!!!!!!!!!!!!!!!!!!`];
-
+    const chosenMessage = funni[Math.floor(Math.random() * funni.length)];
     return await context.octokit.rest.issues.createComment({
       owner: context.repo().owner,
       repo: context.repo().repo,
       issue_number: context.payload.issue.number,
-      body: `$\\Huge\\color{red}{\\text{$funni[Math.floor(Math.random() * funni.length)]}}$`
+      body: `$\\Huge\\color{red}{\\text{${chosenMessage}}}$`
     });
   }
 
