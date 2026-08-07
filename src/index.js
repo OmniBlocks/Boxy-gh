@@ -374,7 +374,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
       owner: context.repo().owner,
       repo: context.repo().repo,
       issue_number: context.payload.issue.number,
-      body: "$\color{red}{\text{The consequences of your actions.}}$"
+      body: "$\\Huge\\color{red}{\\text{The consequences of your actions.}}$"
     });
   }
 
