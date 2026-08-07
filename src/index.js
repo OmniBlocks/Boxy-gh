@@ -364,6 +364,14 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
   if (authorType === "Bot" || author.includes("[bot]")) {
     return;
   }
+  if (author == "PPPDUD") {
+    return await context.octokit.rest.issues.createComment({
+      owner: context.repo().owner,
+      repo: context.repo().repo,
+      issue_number: context.payload.issue.number,
+      body: "$\color{red}{\text{The consequences of your actions.}}$"
+    });
+  }
 
   if (!textBody.includes(mentionHandle) && isComment) return;
 
@@ -435,6 +443,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
       }
 
       conversationHistory += `\n Triggered by: ${author} repo role: (${authorRole}) ${sayThingyThingy}.\n\n`;
+
  
       const { owner: currentOwner, repo: currentRepo } = context.repo();
       const repoKey = `${currentOwner}/${currentRepo}`;
