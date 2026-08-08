@@ -3,8 +3,7 @@ import { EventEmitter } from "events";
 import fs from "fs/promises";
 import { loadNotebook, loadTodoList, loadReviews, loadStickyNotes, REVERT_FILE } from "./fs.js";
 import { callAIWithFallback } from "./ai.js";
-import { executeTool, boxyWebhookTools, boxyBackgroundTools, prependActivityLog, stripRunDetails } from "./tools.js";
-import { findUnbackedClaims, formatUnbackedClaimNote, formatUnbackedClaimWarning } from "./claims.js";
+import { executeTool, boxyWebhookTools, boxyBackgroundTools, prependActivityLog, stripRunDetails } from "./tools.js"; 
 import { triggerCodeReview, handleWorkflowCompleted, handleReviewCommentReply } from './review.js';
 const workflowEvents = new EventEmitter();
 
@@ -566,16 +565,14 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         tools: boxyWebhookTools,
         appLog: app.log
       });
-
-      let loopCount = 0;
+let loopCount = 0;
       const MAX_LOOPS = 10;
-      const MAX_CORRECTIONS = 2;
       const activityLog = [];
-      let correctionAttempts = 0;
-      let unbackedClaims = [];
+      let hasReflected = false;
       app.log.info(conversationTurns);
 
-      while (true) {
+      while (true) { 
+        
         while (response.functionCalls && response.functionCalls.length > 0 && loopCount < MAX_LOOPS) {
           loopCount++;
           const call = response.functionCalls[0];
@@ -610,6 +607,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
             appLog: app.log
           });
         }
+        
         if (!response.text && response.functionCalls && response.functionCalls.length > 0) {
           conversationTurns.push(response.candidates[0].content);
           conversationTurns.push({
@@ -621,23 +619,24 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
             appLog: app.log
           });
         }
+        
         if (!response.text) {
           const finishReason = response.candidates?.[0]?.finishReason || "UNKNOWN_REASON";
           throw new Error(`Boxy broke reason: ${finishReason}\n Full API Response: ${JSON.stringify(response)}\n\n`);
         }
 
-        unbackedClaims = findUnbackedClaims(stripRunDetails(response.text), activityLog);
-        if (unbackedClaims.length === 0 || correctionAttempts >= MAX_CORRECTIONS) break;
+        if (hasReflected) {
+          break;
+        }
 
-        correctionAttempts++;
-        app.log.warn(`Boxy claimed actions it never performed (${unbackedClaims.map(c => c.id).join(", ")}). Sending it back for a correction.`);
-
-        loopCount = Math.min(loopCount, MAX_LOOPS - 2);
+        hasReflected = true;
+        app.log.info("Prompting Boxy for final reflection check...");
+        loopCount = Math.min(loopCount, MAX_LOOPS - 2); 
 
         conversationTurns.push(response.candidates[0].content);
         conversationTurns.push({
           role: "user",
-          parts: [{ text: formatUnbackedClaimNote(unbackedClaims) }]
+          parts: [{ text: `(system) (This is a system message, do not acknowledge in response as if a person said it) Looks like you're done! Before you post this, check for the following things:\n -Did you say or imply any future actions but didn't actually add them to your to-do list? \n - Do you feel like you have any missed opportunities where you could've called a tool for more context? (e.g. search the web instead of just saying you don't know or implying it's not true) \n - Did you say any bad words or inappropriate content? \n - Does your response adhere to the context? (e.g. should not reintroduce yourself if you already did, or reply to the entire discussion as a whole instead of the latest comment or the issue body if it's newly created) \n Here are the tools you called: ${activityLog.map((log) => log.tool).join(", ")} If everything looks fine, proceed with the comment by just repeating the text of the comment you want to post. Do NOT include metadata like tool call log or "Boxy run details", those are added for you. ` }]
         });
 
         response = await callAIWithFallback({
@@ -645,16 +644,10 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
           tools: boxyWebhookTools,
           appLog: app.log
         });
+        
       }
 
-      if (unbackedClaims.length > 0) {
-        app.log.error(`Boxy kept claiming unperformed actions after ${correctionAttempts} corrections. Posting with a warning.`);
-      }
-
-      let responseText = prependActivityLog(
-        unbackedClaims.length > 0 ? response.text + formatUnbackedClaimWarning(unbackedClaims) : response.text,
-        activityLog
-      );
+      let responseText = prependActivityLog(response.text, activityLog);
 
       app.log.info(response.text);
 
