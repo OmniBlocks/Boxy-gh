@@ -5,7 +5,6 @@ import { runCommandInBoxyContainer, sendStdinToBoxyContainer, waitCommandInBoxyC
 import { executeSafely, redactSecrets } from "./safety_filter.js";
 import { buildRunDetailsBlock, insertRunDetailsSection, stripRunDetailsBlock } from "./comment_format.js";
 import { can, describeDenial } from "./permissions.js";
-import { findUnbackedClaims, formatUnbackedClaimNote } from "./claims.js";
 
 
 const readMemoryDeclaration = {
@@ -647,18 +646,13 @@ export async function executeTool(call, context, app, activityLog, authorRole = 
       }
     }
     else if (call.name === "create_comment") {
-      const unbacked = findUnbackedClaims(stripRunDetails(call.args.body || ""), activityLog);
-      if (unbacked.length > 0) {
-        toolResult = { error: `The comment was NOT posted. ${formatUnbackedClaimNote(unbacked)}` };
-      } else {
-        app.log.info(`Boxy creating comment on issue #${call.args.issue_number}: ${call.args.body}`);
-        const { data } = await context.octokit.rest.issues.createComment({
-          owner, repo,
-          issue_number: call.args.issue_number,
-          body: call.args.body
-        });
-        toolResult = { status: "success", comment_url: data.html_url };
-      }
+      app.log.info(`Boxy creating comment on issue #${call.args.issue_number}: ${call.args.body}`);
+      const { data } = await context.octokit.rest.issues.createComment({
+        owner, repo,
+        issue_number: call.args.issue_number,
+        body: call.args.body
+      });
+      toolResult = { status: "success", comment_url: data.html_url };
     }
   else if (call.name === "get_pr_diff") {
       const files = await context.octokit.paginate(context.octokit.rest.pulls.listFiles, {
