@@ -134,7 +134,6 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
 
   const providers = [    
     { name: "gemini-3.5-flash-lite", type: "google", model: "gemini-3.5-flash-lite", useBackup: false },
-    { name: "novita-macaron-v1-venti", type: "novita", model: "mindai/macaron-v1-venti" },
     { name: "gemini-3.1-flash-lite", type: "google", model: "gemini-3.1-flash-lite", useBackup: false },
     { name: "novita-macaron-v1-tall", type: "novita", model: "mindai/macaron-v1-tall" },
     { name: "novita-deepseek-v3.1", type: "novita", model: "deepseek/deepseek-v3.1" },
