@@ -30,4 +30,4 @@ For more, check out the [Contributing Guide](CONTRIBUTING.md).
 
 ## License
 
-[ISC](LICENSE) © 2026 supervoidcoder
+[GPL-3.0](LICENSE) © 2026 supervoidcoder
