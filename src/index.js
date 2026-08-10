@@ -25,8 +25,8 @@ try {
   if (firstInstallation) {
     const octokit = await app.auth(firstInstallation.id);
      const commit = await octokit.rest.repos.getCommit({
-    owner: "OmniBlocks",
-    repo: "Boxy-gh",
+    owner: "BoxyCPU",
+    repo: "BoxyCPU",
     ref: brokenSha
   });
   const commitAuthor = commit.data.author?.login;
@@ -39,8 +39,8 @@ try {
         description: "you genuinely have a skill issue"
       });
     await octokit.rest.repos.createCommitComment({
-      owner: "OmniBlocks",
-      repo: "Boxy-gh",
+      owner: "BoxyCPU",
+      repo: "BoxyCPU",
       commit_sha: brokenSha,
       body: `@${commitAuthor} Your code on commit ${brokenSha} is broken. I've gone back to commit ${safeSha} so that I didn't die because of your skill issue. Please push a new commit to fix it!`
     });
@@ -768,6 +768,30 @@ export default (app) => {
     await cleanupPrContainer(context);
   });
 
+    app.on("installation.created", async (context) => {
+  const { repositories, installation, account } = context.payload;
+
+  // Track who installed Boxy and which repos were granted access
+  const installer = account.login;
+
+  // Loop through all repositories granted access during installation
+  for (const repoRef of repositories) {
+    const [owner, repo] = repoRef.full_name.split("/");
+
+    try {
+      await context.octokit.rest.issues.create({
+        owner,
+        repo,
+        title: "🤖 Boxy is now installed!",
+        body: `Hello! I'm Boxy, your automated assistant. I was installed on this repository by @${installer}.\n\nTag me in any issue or PR comment using \`@boxycpu\` if you need assistance!`
+      });
+
+      context.log.info(`Created welcome issue in ${owner}/${repo}`);
+    } catch (error) {
+      context.log.error(`Failed to create welcome issue in ${owner}/${repo}:`, error);
+    }
+  }
+});
 app.on("push", async (context) => {
     // has to be on repo called "Boxy-gh" not the monorepo cuz the is difeernte
     if (context.payload.repository.name !== "Boxy-gh") {
