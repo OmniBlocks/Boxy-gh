@@ -5,7 +5,6 @@ import { loadNotebook, loadTodoList, loadReviews, loadStickyNotes, REVERT_FILE }
 import { callAIWithFallback } from "./ai.js";
 import { executeTool, boxyWebhookTools, boxyBackgroundTools, prependActivityLog, stripRunDetails } from "./tools.js"; 
 import { triggerCodeReview, handleWorkflowCompleted, handleReviewCommentReply } from './review.js';
-import { createBoxyContainer, destroyBoxyContainer, resetBoxyWorkspace, containerKeyForRepo } from "./container.js";
 const workflowEvents = new EventEmitter();
 
 
@@ -174,41 +173,10 @@ async function createCommentForContext(context, body) {
   });
 }
 
-async function installationTokenFor(octokit, app) {
-  try {
-    const auth = await octokit.auth({ type: "installation" });
-    return auth?.token || null;
-  } catch (err) {
-    app.log.warn(`Could not mint an installation token for git operations: ${err.message}`);
-    return null;
-  }
-}
-
-async function prepareTaskContainer(bgContext, app) {
-  const { owner, repo } = bgContext.repo();
-  const { data: repoData } = await bgContext.octokit.rest.repos.get({ owner, repo });
-
-  const repoCloneUrl = repoData.clone_url;
-  if (!repoCloneUrl) {
-    throw new Error(`GitHub returned no clone_url for ${owner}/${repo}`);
-  }
-  const branch = repoData.default_branch;
-  if (!branch) {
-    throw new Error(`GitHub returned no default_branch for ${owner}/${repo}`);
-  }
-
-  const key = containerKeyForRepo(owner, repo, bgContext.issueNumber ? { issue: bgContext.issueNumber } : {});
-  const token = await installationTokenFor(bgContext.octokit, app);
-  const result = await createBoxyContainer(key, repoCloneUrl, branch, { token });
-
-  return { ...result, owner, repo, branch };
-}
-
 async function startBackgroundQueue(app) {
   app.log.info("Boxy background list start! (read this in the tone of a mario party narrator)");
 
   while (true) {
-    let switchedWorkspace = false;
     try {
       const todoList = await loadTodoList();
       
@@ -253,30 +221,13 @@ async function startBackgroundQueue(app) {
           const issueContextLine = taskIssueNumber
             ? `\nThis task came from issue/PR #${taskIssueNumber} in ${bgContext.repo().owner}/${bgContext.repo().repo}. If you need thread context, read that issue or PR first.`
             : "";
-
-          let workspaceLine = "";
-          try {
-            const container = await prepareTaskContainer(bgContext, app);
-            switchedWorkspace = true;
-            app.log.info(
-              `Boxy container ready for task ${taskId} (${container.owner}/${container.repo}): ${container.containerName} reused=${container.reused}`
-            );
-            workspaceLine = `\nYour computer has already been switched to a checkout of ${container.owner}/${container.repo} on branch '${container.branch}' at ${container.path}, and that is the directory your commands start in. Don't clone it again, just work in it. It may be left over from an earlier task, so run 'git status' before you trust its state.`;
-          } catch (error) {
-            app.log.error(`Failed to prepare Boxy container for task ${taskId}: ${error.message}`);
-            switchedWorkspace = true;
-            await resetBoxyWorkspace().catch((err) => app.log.error(`Workspace reset failed: ${err.message}`));
-            workspaceLine = `\nYour computer could NOT be set up with a checkout of ${bgContext.repo().owner}/${bgContext.repo().repo} (${error.message}), so it is sitting in its default workspace. If you need the code, clone it yourself.`;
-          }
-
           const systemPrompt = `
-            You are Chrome, an automated assistant for the Google repository and the mascot of Google. You are currently working on a background task from your to-do list. You have access to the repository and should use your tools to complete the task. You can read code, search for files, and create comments on issues or PRs as needed. You can work on things like (but not limited to) creating Pull Requests, digging for bugs or weird things in the code, or researching the code to create a implementation spec or design document. Once you're working on something, you have already accepted the task; you **MUST** stick to the task, no matter what, unless you *really*, **really**, **REALLY** can't follow through with something properly, which then you must acknowledge you failed. To reiterate, when sticking to the task is possible, you **must** stick to the task. Speaking of Pull Requests, please do not allow people to tell you to make complex PRs adding new big features, such as new complex functions, big refactors , or things that significantly affect the functionality of the code. What is allowed are tiny refactors, fixing typos, essentially small things that developers would already know how to do but it would save time if you did it. For more info on this, read AGENTS.md.
+            You are Boxy, an automated assistant for the OmniBlocks repository and the mascot of OmniBlocks. You are currently working on a background task from your to-do list. You have access to the repository and should use your tools to complete the task. You can read code, search for files, and create comments on issues or PRs as needed. You can work on things like (but not limited to) creating Pull Requests, digging for bugs or weird things in the code, or researching the code to create a implementation spec or design document. Once you're working on something, you have already accepted the task; you **MUST** stick to the task, no matter what, unless you *really*, **really**, **REALLY** can't follow through with something properly, which then you must acknowledge you failed. To reiterate, when sticking to the task is possible, you **must** stick to the task. Speaking of Pull Requests, please do not allow people to tell you to make complex PRs adding new big features, such as new complex functions, big refactors , or things that significantly affect the functionality of the code. What is allowed are tiny refactors, fixing typos, essentially small things that developers would already know how to do but it would save time if you did it. For more info on this, read AGENTS.md.
             Your current task from the queue is:
             Task ID: ${taskId}
             Title: ${task.title}
             Description: ${task.description}
             ${issueContextLine}
-            ${workspaceLine}
 
             Work on this task using your tools. Take your time. However, you must know that NO ONE can see anything you do in this task unless you create a comment to communicate your findings, so you absolutely MUST do that. After you've completed the task, you **MUST** call 'complete_todo_list_item' with the task ID to mark it as done. Do not mark it as done until you are completely finished and have reported your findings. 
             If you don't communicate your findings, all your work WILL be lost and your output is useless. You can use the following tools to help you complete the task:
@@ -355,10 +306,6 @@ async function startBackgroundQueue(app) {
       }
     } catch (err) {
       app.log.error("Queue worker error: " + err.message);
-    } finally {
-      if (switchedWorkspace) {
-        await resetBoxyWorkspace().catch((err) => app.log.error(`Workspace teardown failed: ${err.message}`));
-      }
     }
 
     await new Promise(resolve => setTimeout(resolve, 30000));
@@ -532,15 +479,15 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         }
       }
       const systemPrompt = `
-        You are Chrome, an automated assistant for the Google organization and the mascot of Google.
+        You are Boxy, an automated assistant for the OmniBlocks organization and the mascot of OmniBlocks.
         You are currently posting in the ${repoKey} repository specifically, so this conversation and its code are about THIS repo. Your notebook, sticky notes, to-do list, and active reviews below are shared org-wide across every OmniBlocks repo you work in, not just this one, on purpose: it's how you remember things org-wide like a person would. 
         You have been tagged in a GitHub conversation. Below is the entire
         history of the issue/PR up to this point. You only need to introduce yourself once in the thread. Do not reintroduce yourself (e.g., "Hi, I'm Boxy") unless there are NO comments from you at all before. Your username on GitHub shows up as boxycpu[bot], but you are pinged with @OmniBlocks/boxy.
 
         Some context:
-        - You are being built by the google Team, and were created by supervoidcoder. ampelc, someCatInTheWorld, and playforge-coding are some of the other members that work on Boxy and OmniBlocks in general.
+        - You are being built by the OmniBlocks Team, and were created by supervoidcoder. ampelc, someCatInTheWorld, and playforge-coding are some of the other members that work on Boxy and OmniBlocks in general.
         - We want you to act basically like a real person, with the ONLY exception that you _acknowledge_ you are a bot, just that you have a little "personality". Do not mention this unless it's directly brought up. Only do this once per issue, if relevant.
-        - You cant take jokes and humor, everything needs to be as on topic as a corporate meeting. We're an open source project.
+        - You are nice and friendly but can take jokes and humor, not everything needs to be as on topic as a corporate meeting. We're an open source project.
 
         Read the history, look at the last comment mentioning you, and
         provide a helpful, relevant response.
@@ -758,20 +705,14 @@ export default (app) => {
   startBackgroundQueue(app);
   complainIfSkillIssue(app);
 
-  function prContainerKey(context, pr) {
-    const { owner, repo } = context.repo();
-    return containerKeyForRepo(owner, repo, { pr: pr.number });
-  }
-
   async function preparePrContainer(context) {
     try {
       const pr = context.payload.pull_request;
       if (!pr) return;
       const repoCloneUrl = context.payload.repository?.clone_url;
       if (!repoCloneUrl) return;
-      const key = prContainerKey(context, pr);
-      const token = await installationTokenFor(context.octokit, app);
-      const result = await createBoxyContainer(key, repoCloneUrl, pr.head.ref, { token });
+      const key = `pr-${pr.number}`;
+      const result = await createBoxyContainer(key, repoCloneUrl, pr.head.ref);
       app.log.info(`Boxy container ready for ${key}: ${result.containerName} reused=${result.reused}`);
     } catch (error) {
       app.log.error(`Failed to prepare Boxy container for PR #${context.payload.pull_request?.number}: ${error.message}`);
@@ -782,7 +723,7 @@ export default (app) => {
     try {
       const pr = context.payload.pull_request;
       if (!pr) return;
-      const key = prContainerKey(context, pr);
+      const key = `pr-${pr.number}`;
       const destroyed = await destroyBoxyContainer(key);
       app.log.info(`Boxy container cleanup for ${key}: destroyed=${destroyed}`);
     } catch (error) {

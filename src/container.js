@@ -1,6 +1,5 @@
 import { spawn, execFile } from "child_process";
 import { promisify } from "util";
-import crypto from "node:crypto";
 import path from "node:path";
 import { loadTodoList, loadReviews, loadContainerMap, saveContainerMap } from "./fs.js";
 
@@ -39,55 +38,6 @@ function assertSafeCloneUrl(url) {
   if (typeof url !== "string" || !/^(https?:\/\/|git@)/.test(url)) {
     throw new Error(`Invalid repository clone URL: ${url}`);
   }
-}
-
-function slugSegment(value) {
-  const slug = String(value ?? "")
-    .replace(/[^A-Za-z0-9_-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40);
-  return slug || "unknown";
-}
-
-export function containerKeyForRepo(owner, repo, scope = {}) {
-  if (!owner || !repo) {
-    throw new Error(`Cannot build a container key without an owner and repo (got ${owner}/${repo}).`);
-  }
-  const fingerprint = crypto
-    .createHash("sha256")
-    .update(`${owner}/${repo}`.toLowerCase())
-    .digest("hex");
-  const base = `${slugSegment(owner)}-${slugSegment(repo)}-${fingerprint}`;
-
-  const { pr, issue } = scope || {};
-  const suffixKind = pr !== undefined && pr !== null ? "pr" : issue !== undefined && issue !== null ? "issue" : null;
-  if (!suffixKind) return base;
-
-  const number = suffixKind === "pr" ? pr : issue;
-  if (!/^\d+$/.test(String(number))) {
-    throw new Error(`Invalid ${suffixKind} number for container key: ${number}`);
-  }
-  return `${base}-${suffixKind}-${number}`;
-}
-
-function gitCredentialPrefix(token) {
-  if (!token) return "";
-  const rewriteKey = `url.https://x-access-token:${token}@github.com/.insteadOf`;
-  return (
-    `GIT_CONFIG_COUNT=1 ` +
-    `GIT_CONFIG_KEY_0=${shQuote(rewriteKey)} ` +
-    `GIT_CONFIG_VALUE_0=${shQuote("https://github.com/")} ` +
-    `GITHUB_TOKEN=${shQuote(token)} `
-  );
-}
-
-function normalizeCloneUrl(url) {
-  return String(url ?? "")
-    .trim()
-    .replace(/\/+$/, "")
-    .replace(/\.git$/i, "")
-    .replace(/\/+$/, "")
-    .toLowerCase();
 }
 
 function sshArgs(remoteCommand) {
@@ -217,8 +167,15 @@ export async function runCommandInBoxyContainer(command, isBoxyWebhook = false, 
       command
     };
 
-    const credentialPrefix =
-      token && (command.includes("git") || command.includes("gh")) ? gitCredentialPrefix(token) : "";
+    let credentialPrefix = "";
+    if (token && (command.includes("git") || command.includes("gh"))) {
+      const rewriteKey = `url.https://x-access-token:${token}@github.com/.insteadOf`;
+      credentialPrefix =
+        `GIT_CONFIG_COUNT=1 ` +
+        `GIT_CONFIG_KEY_0=${shQuote(rewriteKey)} ` +
+        `GIT_CONFIG_VALUE_0=${shQuote("https://github.com/")} ` +
+        `GITHUB_TOKEN=${shQuote(token)} `;
+    }
 
     const safeCmd = command.replace(/'/g, "'\\''");
     const wrappedStr =
@@ -447,7 +404,7 @@ export async function getBoxyCwd() {
   return result.status === "completed" ? result.stdout.trim() : currentWorkspacePath;
 }
 
-export async function createBoxyContainer(key, repoCloneUrl, branch, options = {}) {
+export async function createBoxyContainer(key, repoCloneUrl, branch) {
   if (activeTask) {
     throw new Error("Cannot switch workspaces while a command is running. Wait for or cancel the active command first.");
   }
@@ -457,19 +414,15 @@ export async function createBoxyContainer(key, repoCloneUrl, branch, options = {
 
   await ensureVmReady();
 
-  const gitPrefix = gitCredentialPrefix(options.token);
   const containerMap = await loadContainerMap();
   const remotePath = `${REMOTE_BASE}/${key}`;
   const existing = containerMap[key];
-  const wantedUrl = normalizeCloneUrl(repoCloneUrl);
 
   let reused = false;
-  if (existing && normalizeCloneUrl(existing.repoCloneUrl) === wantedUrl) {
+  if (existing) {
     try {
-      const { stdout } = await runRemoteCommand(
-        `test -d ${shQuote(remotePath + "/.git")} && git -C ${shQuote(remotePath)} remote get-url origin`
-      );
-      reused = normalizeCloneUrl(stdout) === wantedUrl;
+      await runRemoteCommand(`test -d ${shQuote(remotePath + "/.git")}`);
+      reused = true;
     } catch {
       reused = false;
     }
@@ -477,11 +430,11 @@ export async function createBoxyContainer(key, repoCloneUrl, branch, options = {
 
   if (reused) {
     await runRemoteCommand(
-      `cd ${shQuote(remotePath)} && ${gitPrefix}git fetch origin ${shQuote(branch)} && git checkout ${shQuote(branch)} && git reset --hard ${shQuote("origin/" + branch)}`
+      `cd ${shQuote(remotePath)} && git fetch origin ${shQuote(branch)} && git checkout ${shQuote(branch)} && git reset --hard ${shQuote("origin/" + branch)}`
     );
   } else {
     await runRemoteCommand(
-      `rm -rf ${shQuote(remotePath)} && ${gitPrefix}git clone --branch ${shQuote(branch)} --single-branch ${shQuote(repoCloneUrl)} ${shQuote(remotePath)}`
+      `rm -rf ${shQuote(remotePath)} && git clone --branch ${shQuote(branch)} --single-branch ${shQuote(repoCloneUrl)} ${shQuote(remotePath)}`
     );
   }
 
@@ -494,19 +447,6 @@ export async function createBoxyContainer(key, repoCloneUrl, branch, options = {
   }
 
   return { containerName: key, reused, path: remotePath };
-}
-
-export async function resetBoxyWorkspace() {
-  if (activeTask) {
-    await killCommandInBoxyContainer().catch(() => {});
-    activeTask = null;
-  }
-
-  currentWorkspacePath = DEFAULT_WORKSPACE;
-  if (activeShell && !activeShell.killed) {
-    activeShell.stdin.write(`mkdir -p ${shQuote(DEFAULT_WORKSPACE)}; cd ${shQuote(DEFAULT_WORKSPACE)}\n`);
-  }
-  return DEFAULT_WORKSPACE;
 }
 
 export async function destroyBoxyContainer(key) {
