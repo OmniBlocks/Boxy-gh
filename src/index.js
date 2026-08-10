@@ -30,6 +30,14 @@ try {
     ref: brokenSha
   });
   const commitAuthor = commit.data.author?.login;
+    await octokit.rest.repos.createCommitStatus({
+        owner: "OmniBlocks",
+        repo: "Boxy-gh",
+        sha: brokenSha,
+        state: "failed",
+        context: "boxy/auto-update",
+        description: "you genuinely have a skill issue"
+      });
     await octokit.rest.repos.createCommitComment({
       owner: "OmniBlocks",
       repo: "Boxy-gh",
@@ -759,26 +767,23 @@ export default (app) => {
     await cleanupPrContainer(context);
   });
 
-  app.on("push", async (context) => {
-     // has to be on repo called "Boxy-gh" not the monorepo cuz the is difeernte
+app.on("push", async (context) => {
+    // has to be on repo called "Boxy-gh" not the monorepo cuz the is difeernte
     if (context.payload.repository.name !== "Boxy-gh") {
-//      app.log.info(`not on Boxy-gh repo, so not doing anything : ${context.payload.repository.name}`);
+      // app.log.info(`not on Boxy-gh repo, so not doing anything : ${context.payload.repository.name}`);
       return;
-    }    const commitSha = context.payload.head_commit.id;
+    }
+    const commitSha = context.payload.head_commit.id;
     const branch = context.payload.ref.replace("refs/heads/", "");
-    
+
     if (branch !== "main") {
       app.log.info(`not on main branch, so not doing anything : ${branch}`);
       return;
     }
- 
-
 
     // we don't want boxy to update itself when it's busy so we have to trackkkkk when its like pending updatse
-
     let isBusy = false;
 
-    
     const todoList = await loadTodoList();
     for (const [id, item] of Object.entries(todoList)) {
       if (!item.completed) {
@@ -786,16 +791,27 @@ export default (app) => {
         break;
       }
     }
- 
+
     if (!isBusy) {
       const reviews = await loadReviews();
-      if (Object.keys(reviews).length > 0) { 
+      if (Object.keys(reviews).length > 0) {
       }
     }
     const commit = context.payload.head_commit;
     const commitAuthor = commit.author.name;
     if (isBusy) {
       app.log.info("NO UPDAT");
+      
+      // Set commit status to pending
+      await context.octokit.rest.repos.createCommitStatus({
+        owner: context.repo().owner,
+        repo: context.repo().repo,
+        sha: commitSha,
+        state: "pending",
+        context: "boxy/auto-update",
+        description: "I have acknowledged your commit, but I'm currently busy with other tasks. I'll update myself later when I'm done!"
+      });
+
       await context.octokit.rest.repos.createCommitComment({
         owner: context.repo().owner,
         repo: context.repo().repo,
@@ -803,30 +819,26 @@ export default (app) => {
         body: `Hi @${commitAuthor}! I have acknowledged your commit, but I'm currently busy with other tasks. I'll update myself later when I'm done! 🛠️`
       });
       return;
-    } else { 
+    } else {
+      // Set commit status to success
+      await context.octokit.rest.repos.createCommitStatus({
+        owner: context.repo().owner,
+        repo: context.repo().repo,
+        sha: commitSha,
+        state: "pending",
+        context: "boxy/auto-update",
+        description: "Updating..."
+      });
+
       await context.octokit.rest.repos.createCommitComment({
         owner: context.repo().owner,
         repo: context.repo().repo,
         commit_sha: commitSha,
         body: `@${commitAuthor} I have acknowledged your commit. Assuming this doesn't break me, I'll restart myself with the new changes. If it does, then skill issue.`
-      }); 
-      
+      });
+
       setTimeout(() => {
-         process.exit(0); 
+        process.exit(0);
       }, 2000);
     }
   });
-  app.on("workflow_run.completed", async (context) => {
-    app.log.info("WORKFLO RECEIVED NOW WAIT FOR IT TO FAIL MISERABLY or succeed unexpeectedly")
-    handleWorkflowCompleted(context, app);
-  });
-
-  app.on("pull_request_review_comment.created", async (context) => {
-    handleReviewCommentReply(context, app);
-  });
-  } catch (e) {
-const trace = e.stack || e.message;
-app.log.error(trace, "AN ERROR OCCURRED");
- process.exit(1);
-  }
-};
