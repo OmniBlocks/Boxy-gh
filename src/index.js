@@ -165,10 +165,10 @@ async function createCommentForContext(context, body) {
     throw new Error("Missing issue_number for createCommentForContext");
   }
 
-  return await context.octokit.rest.issues.createComment({
+return await context.octokit.rest.issues.create({
     owner: repo.owner,
     repo: repo.repo,
-    issue_number: issueNumber,
+    title: "Boxy",
     body
   });
 }
