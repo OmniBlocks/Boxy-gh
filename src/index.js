@@ -655,7 +655,7 @@ let loopCount = 0;
           discussion_comment_id: context.payload.comment.id,
           discussion_comment_node_id: context.payload.comment.node_id,
           discussion_node_id: context.payload.discussion?.node_id || context.payload.comment.node_id,
-          body: systemPrompt
+          body: responseText
         });
       }
 
