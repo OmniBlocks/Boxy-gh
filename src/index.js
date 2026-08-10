@@ -659,7 +659,7 @@ let loopCount = 0;
         });
       }
 
-      return await createCommentForContext(context, systemPrompt);
+      return await createCommentForContext(context, responseText);
       
     } catch (error) {
       app.log.error("ERROR inside processing block:", error.message);
