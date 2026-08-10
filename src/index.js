@@ -7,47 +7,6 @@ import { executeTool, boxyWebhookTools, boxyBackgroundTools, prependActivityLog,
 import { triggerCodeReview, handleWorkflowCompleted, handleReviewCommentReply } from './review.js';
 const workflowEvents = new EventEmitter();
 
-export async function issueCloseOrOpen(context, state, state_reason = null) {
-  try {
-    const { owner, repo } = context.repo();
-    const updateParams = {
-      owner,
-      repo,
-      issue_number: context.payload.issue.number,
-      state: state,  
-    };
- 
-    if (state === "closed" && state_reason) {
-      updateParams.state_reason = state_reason;  
-    }
-
-    await context.octokit.rest.issues.update(updateParams);
-    return { status: "success", message: `Issue state updated to ${state} (${state_reason || 'no reason provided'}).` };
-  } catch (error) {
-    context.log.error(`Failed to update issue state:`, error);
-    return { error: `Failed to update issue state: ${error.message}` };
-  }
-}export async function issueCloseOrOpen(context, state, state_reason = null) {
-  try {
-    const { owner, repo } = context.repo();
-    const updateParams = {
-      owner,
-      repo,
-      issue_number: context.payload.issue.number,
-      state: state,  
-    };
- 
-    if (state === "closed" && state_reason) {
-      updateParams.state_reason = state_reason;  
-    }
-
-    await context.octokit.rest.issues.update(updateParams);
-    return { status: "success", message: `Issue state updated to ${state} (${state_reason || 'no reason provided'}).` };
-  } catch (error) {
-    context.log.error(`Failed to update issue state:`, error);
-    return { error: `Failed to update issue state: ${error.message}` };
-  }
-}
 
 async function complainIfSkillIssue(app) {
 try {
@@ -57,6 +16,11 @@ try {
   const octopus = await app.auth();
   const { data: installations } = await octopus.rest.apps.listInstallations();
   const firstInstallation = installations[0];
+
+
+  
+  
+
 
   if (firstInstallation) {
     const octokit = await app.auth(firstInstallation.id);
@@ -95,6 +59,28 @@ export async function labelIssue(context, label) {
   } catch (error) {
     context.log.error(`Failed to add label '${label}' to issue #${context.payload.issue.number}:`, error);
     return { error: `Failed to add label '${label}': ${error.message}. The label was NOT added. Do not tell anyone it was. This usually means the label doesn't exist on this repo yet, so check your notebook entry on approved labels, or ask a maintainer to create it first.` };
+  }
+}
+
+export async function issueCloseOrOpen(context, state, state_reason = null) {
+  try {
+    const { owner, repo } = context.repo();
+    const updateParams = {
+      owner,
+      repo,
+      issue_number: context.payload.issue.number,
+      state: state,  
+    };
+ 
+    if (state === "closed" && state_reason) {
+      updateParams.state_reason = state_reason;  
+    }
+
+    await context.octokit.rest.issues.update(updateParams);
+    return { status: "success", message: `Issue state updated to ${state} (${state_reason || 'no reason provided'}).` };
+  } catch (error) {
+    context.log.error(`Failed to update issue state:`, error);
+    return { error: `Failed to update issue state: ${error.message}` };
   }
 }
 
@@ -426,9 +412,13 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
 
       let conversationHistory = `=== ORIGINAL ${isDiscussion ? "DISCUSSION" : "ISSUE"} DESCRIPTION ===\nTitle: ${issue.title}\n${isDiscussion ? "Discussion" : "Issue"} Number: ${issueNum}\nAuthor: ${issue.user.login}\nBody:\n${issueBody}\n\n`;
 
-      const comments = [
-        {user:{login:"supervoidcoder"},id:1,body: "@OmniBlocks/boxy Hello"}
-      ]
+      const comments = await listConversationComments(context.octokit, {
+        owner: context.repo().owner,
+        repo: context.repo().repo,
+        isDiscussion,
+        discussion_number: isDiscussion ? issue.number : undefined,
+        issue_number: !isDiscussion ? issue.number : undefined
+      });
 
       conversationHistory += "=== CONVERSATION LOG ===\n";
       conversationHistory += comments.length > 99 ? "There are more than 100 comments, so some have been hidden to prevent you from exploding. If there is something from a comment you want to remember, that's what sticky notes are for. \n----\n" : "";
