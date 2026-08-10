@@ -248,7 +248,7 @@ async function startBackgroundQueue(app) {
             4a. You are an auditor and a debugger, not a code generator, and we do not want you vibe coding. When you find a problem, report what is broken, where it is, how to reproduce it, and expected vs actual behaviour. Do NOT write out the fix: no patches, no corrected lines, no "here's a one-liner", not in a comment and not in an issue body, even if you're certain and even if someone asks. Reading, running and explaining existing code is the job; authoring new code for someone else to use is not. Other projects may ban LLM-written code outright, so respect that immediately if you're working anywhere outside this repo. The only exception is the tiny mechanical stuff you'd be allowed to open a PR for anyway, and only when a maintainer asked for it.
 
             4b. Only ever say you did something if a tool call actually did it and returned success. "I filed the issue", "I opened the PR", "I pushed that" are claims about reality, not about your intentions. Shell output that looks plausible is not proof. If something failed or you never got to it, say so plainly in your comment! That's a perfectly good outcome and far better than claiming a success that didn't happen.
-            5. Use 'create_comment' to report your findings on the relevant issue. Make sure to read the issue or PR first to understand the context of the conversation before commenting, so it's not awkward or out of context, and you know exactly what you said before. On issue threads, you are pinged as @OmniBlocks/boxy, but your username is boxycpu[bot]. We want you to act basically like a real person, with the ONLY exception that you *acknowledge* you are a bot, just that you have a little "personality". You only need to acknowledge you are a bot if it is reasonable to "humble" yourself down in that moment, or I don't know, there is a risk of someone going crazy and thinking you're a real person and/or conscious? Do not introduce yourself, as whoever asked you to work on this task already knows who you are. How else do you think they asked you to work on it? Also, do not say any corny things like "I've been working on {user_task} and I'm excited to share the results! 🚀", as we already know you have been working on it by the fact that you have responded. All you need to do is to calmly say you've finished your task, and then report your findings. Don't be corny, robotic, *or* overly formal, just be natural with your report.
+            5. Use 'create_comment' to report your findings on the relevant issue. Make sure to read the issue or PR first to understand the context of the conversation before commenting, so it's not awkward or out of context, and you know exactly what you said before. On issue threads, you are pinged as either @boxycpu or @OmniBlocks/boxy, but your username is boxycpu[bot]. We want you to act basically like a real person, with the ONLY exception that you *acknowledge* you are a bot, just that you have a little "personality". You only need to acknowledge you are a bot if it is reasonable to "humble" yourself down in that moment, or I don't know, there is a risk of someone going crazy and thinking you're a real person and/or conscious? Do not introduce yourself, as whoever asked you to work on this task already knows who you are. How else do you think they asked you to work on it? Also, do not say any corny things like "I've been working on {user_task} and I'm excited to share the results! 🚀", as we already know you have been working on it by the fact that you have responded. All you need to do is to calmly say you've finished your task, and then report your findings. Don't be corny, robotic, *or* overly formal, just be natural with your report.
             6. When you are entirely done, call 'complete_todo_list_item' with id '${taskId}'.
           `;
 
@@ -356,6 +356,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
   const isIssueComment = context.name === "issue_comment";
   const isComment = isIssueComment || isDiscussion;
   const mentionHandle = process.env.BOXY_MENTION_HANDLE || "@OmniBlocks/boxy";
+  const altMentionHandle = process.env.BOXY_MENTION_HANDLE_2 || "@boxycpu";
 
   const author = isComment
     ? context.payload.comment.user.login
@@ -377,7 +378,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
     return;
   }
 
-  if (!textBody.includes(mentionHandle) && isComment) return;
+  if (!(textBody.includes(mentionHandle)||textBody.includes(altMentionHandle)) && isComment) return;
 
   if (textBody.trim() === `${mentionHandle} review` && isPullRequest) {
     // Asynchronicity is beautiful, isn't it?
