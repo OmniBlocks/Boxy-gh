@@ -66,7 +66,7 @@ export function sanitizeModelCommentText(text, elapsedSeconds, explicitReasoning
   }
 
   const reasoningBlock = escapeHtml(extractedReasoning.trim() || "No reasoning.");
-  const details = `<details>\n<summary>💭 Thought for ${elapsedSeconds} seconds</summary>\n\n<pre>${reasoningBlock}</pre>\n\n</details>`;
+  const details = `<details>\n<summary>💭 Thought for ${elapsedSeconds} seconds</summary>\n\n${reasoningBlock}\n\n</details>`;
 
   return cleanedText ? `${details}\n\n${cleanedText}` : details;
 }
