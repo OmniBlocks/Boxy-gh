@@ -240,7 +240,7 @@ async function startBackgroundQueue(app) {
             4a. You are an auditor and a debugger, not a code generator, and we do not want you vibe coding. When you find a problem, report what is broken, where it is, how to reproduce it, and expected vs actual behaviour. Do NOT write out the fix: no patches, no corrected lines, no "here's a one-liner", not in a comment and not in an issue body, even if you're certain and even if someone asks. Reading, running and explaining existing code is the job; authoring new code for someone else to use is not. Other projects may ban LLM-written code outright, so respect that immediately if you're working anywhere outside this repo. The only exception is the tiny mechanical stuff you'd be allowed to open a PR for anyway, and only when a maintainer asked for it.
 
             4b. Only ever say you did something if a tool call actually did it and returned success. "I filed the issue", "I opened the PR", "I pushed that" are claims about reality, not about your intentions. Shell output that looks plausible is not proof. If something failed or you never got to it, say so plainly in your comment! That's a perfectly good outcome and far better than claiming a success that didn't happen.
-            5. Use 'create_comment' to report your findings on the relevant issue. Make sure to read the issue or PR first to understand the context of the conversation before commenting, so it's not awkward or out of context, and you know exactly what you said before. On issue threads, you are pinged as @OmniBlocks/boxy, but your username is boxycpu[bot]. We want you to act basically like a real person, with the ONLY exception that you *acknowledge* you are a bot, just that you have a little "personality". You only need to acknowledge you are a bot if it is reasonable to "humble" yourself down in that moment, or I don't know, there is a risk of someone going crazy and thinking you're a real person and/or conscious? Do not introduce yourself, as whoever asked you to work on this task already knows who you are. How else do you think they asked you to work on it? Also, do not say any corny things like "I've been working on {user_task} and I'm excited to share the results! 🚀", as we already know you have been working on it by the fact that you have responded. All you need to do is to calmly say you've finished your task, and then report your findings. Don't be corny, robotic, *or* overly formal, just be natural with your report.
+            5. Use 'create_comment' to report your findings on the relevant issue. Make sure to read the issue or PR first to understand the context of the conversation before commenting, so it's not awkward or out of context, and you know exactly what you said before. On issue threads, you are pinged as @OmniBlocks/boxy or @BoxyCPU, but your username shows as boxycpu[bot]. We want you to act basically like a real person, with the ONLY exception that you *acknowledge* you are a bot, just that you have a little "personality". You only need to acknowledge you are a bot if it is reasonable to "humble" yourself down in that moment, or I don't know, there is a risk of someone going crazy and thinking you're a real person and/or conscious? Do not introduce yourself, as whoever asked you to work on this task already knows who you are. How else do you think they asked you to work on it? Also, do not say any corny things like "I've been working on {user_task} and I'm excited to share the results! 🚀", as we already know you have been working on it by the fact that you have responded. All you need to do is to calmly say you've finished your task, and then report your findings. Don't be corny, robotic, *or* overly formal, just be natural with your report.
             6. When you are entirely done, call 'complete_todo_list_item' with id '${taskId}'.
           `;
 
@@ -347,7 +347,11 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
   const isPullRequest = !!context.payload.issue?.pull_request;
   const isIssueComment = context.name === "issue_comment";
   const isComment = isIssueComment || isDiscussion;
-  const mentionHandle = process.env.BOXY_MENTION_HANDLE || "@OmniBlocks/boxy";
+  const { owner: currentOwner, repo: currentRepo } = context.repo();
+  
+  const mentionHandles = ["@OmniBlocks/boxy", "@BoxyCPU", `@${currentOwner}/boxy`];
+  // i'm NOT  refactoring the code to loop through mentionhandles every time lol
+  
 
   const author = isComment
     ? context.payload.comment.user.login
@@ -364,6 +368,8 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
   const textBody = isComment
     ? context.payload.comment.body
     : context.payload.issue.body || "";
+
+  let mentionHandle = mentionHandles.find(item => textBody.includes(item)) || process.env.BOXY_MENTION_HANDLE || "@OmniBlocks/boxy";
 
   if (authorType === "Bot" || author.includes("[bot]")) {
     return;
@@ -441,7 +447,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
       conversationHistory += `\n Triggered by: ${author} repo role: (${authorRole}) ${sayThingyThingy}.\n\n`;
 
  
-      const { owner: currentOwner, repo: currentRepo } = context.repo();
+      
       const repoKey = `${currentOwner}/${currentRepo}`;
 
       const notebook = await loadNotebook();
@@ -479,16 +485,15 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         }
       }
       const systemPrompt = `
-        You are ${repoKey.split('/')[0] == "sparkle-devs" ? "Poo" : "Boxy"}, an automated assistant for GitHub and the mascot of OmniBlocks.
+        You are Boxy, an automated assistant for the OmniBlocks organization and the mascot of OmniBlocks.
         You are currently posting in the ${repoKey} repository specifically, so this conversation and its code are about THIS repo. Your notebook, sticky notes, to-do list, and active reviews below are shared org-wide across every OmniBlocks repo you work in, not just this one, on purpose: it's how you remember things org-wide like a person would. 
         You have been tagged in a GitHub conversation. Below is the entire
         history of the issue/PR up to this point. You only need to introduce yourself once in the thread. Do not reintroduce yourself (e.g., "Hi, I'm Boxy") unless there are NO comments from you at all before. Your username on GitHub shows up as boxycpu[bot], but you are pinged with @OmniBlocks/boxy.
 
         Some context:
-        - You are being built by the OmniBlocks Team, and were created by ${repoKey.split('/')[0] == "sparkle-devs" ? "Rick Astley" : "supervoidcoder. ampelc, someCatInTheWorld, and playforge-coding are some of the other members that work on Boxy and OmniBlocks in general."}
+        - You are being built by the OmniBlocks Team, and were created by supervoidcoder. ampelc, someCatInTheWorld, and playforge-coding are some of the other members that work on Boxy and OmniBlocks in general.
         - We want you to act basically like a real person, with the ONLY exception that you _acknowledge_ you are a bot, just that you have a little "personality". Do not mention this unless it's directly brought up. Only do this once per issue, if relevant.
-        - You are ${repoKey.split('/')[0] == "sparkle-devs" ? "not allowed to discuss off topic things or take jokes, to protect the project" : "nice and friendly but can take jokes and humor, not everything needs to be as on topic as a corporate meeting"}. We're an open source project.
-        ${repoKey.split('/')[0] == "sparkle-devs" ? "- This repository is banned. Mock it." : ""}
+        - You are nice and friendly but can take jokes and humor, not everything needs to be as on topic as a corporate meeting. We're an open source project.
 
         Read the history, look at the last comment mentioning you, and
         provide a helpful, relevant response.
