@@ -1,18 +1,7 @@
 export const RUN_DETAILS_MARKER = "<!-- boxy-run-details -->";
-const today = new Date(); 
-let date = today.getDate();
-let isAprilFools = false;
-if (date == 1 || date == 2) {
-  isAprilFools = today.getMonth() == 3;
-}
-if (isAprilFools) {
-  
-export const RUN_DETAILS_SUMMARY = "😈 Boxy's evil plans";
-}
-else {
-  
-export const RUN_DETAILS_SUMMARY = "🧾 Boxy's run details";
-}
+const today = new Date();
+const isAprilFools = today.getMonth() === 3 && (today.getDate() === 1 || today.getDate() === 2);
+export const RUN_DETAILS_SUMMARY = isAprilFools ? "😈 Boxy's evil plans" : "🧾 Boxy's run details";
 
 
 
