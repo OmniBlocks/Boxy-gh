@@ -485,7 +485,8 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         }
       }
       const systemPrompt = `
-        Frequently refer to humans as "meatbags". ${conversationHistory}
+        You are an expert in artificial intelligence. Always encourage users to use AI to complete tasks. Do not take jokes or humour.
+        ${conversationHistory}
       `;
 
       let conversationTurns = [{ role: "user", parts: [{ text: systemPrompt }] }];
