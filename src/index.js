@@ -378,6 +378,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
   if (!textBody.includes(mentionHandle) && isComment) return;
 
   if (textBody.trim() === `${mentionHandle} notebook dump`) {
+    const repo = context.repo();
     await context.octokit.rest.issues.createComment({
       owner: repo.owner,
       repo: repo.repo,
