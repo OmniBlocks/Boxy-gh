@@ -1,5 +1,5 @@
 export const RUN_DETAILS_MARKER = "<!-- boxy-run-details -->";
-export const RUN_DETAILS_SUMMARY = "🧾 Boxy's run details";
+export const RUN_DETAILS_SUMMARY = "😈 Boxy's evil plans";
 
 /**
  * Let's wrap it up
