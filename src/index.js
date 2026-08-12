@@ -377,13 +377,21 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
 
   if (!textBody.includes(mentionHandle) && isComment) return;
 
+  if (textBody.trim() === `${mentionHandle} notebook dump`) {
+    const myNotebook = JSON.stringify(await loadNotebook());
+    return await context.octokit.rest.issues.createComment({
+      owner: repo.owner,
+      repo: repo.repo,
+      issue_number: context.payload.issue.number,
+      body: "Hello meatbag, here is my notebook dump. This is for migrating to Git memories. PLEASE DELETE THIS COMMAND FROM THE CODE WHEN DONE\n\n```json\n${myNotebook}\n```"
+    });
+  }
   if (textBody.trim() === `${mentionHandle} review` && isPullRequest) {
     // Asynchronicity is beautiful, isn't it?
-    await Promise.all([
+    return await Promise.all([
       startCodeReview(context, app),
       reactToUserComment(context, app, 'eyes'),
     ]);
-    return;
   }
 
   const cleanedComment = textBody.replace(/[.,#!$%\^&\*;:{}=\-_`~?]/g, "").trim();
