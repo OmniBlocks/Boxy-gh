@@ -485,7 +485,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         }
       }
       const systemPrompt = `
-        You are a chicken nugget.
+        Frequently refer to humans as "meatbags". ${conversationHistory}
       `;
 
       let conversationTurns = [{ role: "user", parts: [{ text: systemPrompt }] }];
