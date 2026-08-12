@@ -377,7 +377,8 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
 
   if (!textBody.includes(mentionHandle) && isComment) return;
 
-  if (textBody.trim() === `${mentionHandle} notebook dump`) {
+  // it has been dumped
+/*  if (textBody.trim() === `${mentionHandle} notebook dump`) {
     const repo = context.repo();
     await context.octokit.rest.issues.createComment({
       owner: repo.owner,
@@ -393,7 +394,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
       body: `Hello @${author}, here is my notebook as of ${new Date().toLocaleDateString()}. This is for migrating to Git memories. PLEASE DELETE THIS COMMAND FROM THE CODE WHEN DONE\n\n\`\`\`json\n${JSON.stringify(myNotebook, null, '\t')}\n\`\`\``
     });
     return;
-  }
+  }*/
   if (textBody.trim() === `${mentionHandle} review` && isPullRequest) {
     // Asynchronicity is beautiful, isn't it?
     return await Promise.all([
