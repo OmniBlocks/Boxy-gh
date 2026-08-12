@@ -500,10 +500,12 @@ export async function executeTool(call, context, app, activityLog, authorRole = 
       toolResult = content ? { content } : { error: `Memory '${call.args.title}' not found.` };
     }
     else if (call.name === "save_memory") {
+      return toolResult = {error: "You cannot save memories right now because you are migrating to Git memories."};
       await saveMemoryToFile(call.args.title, call.args.content);
       toolResult = { status: "success", message: `Saved '${call.args.title}'!` };
     }
     else if (call.name === "edit_memory_entry") {
+      return toolResult = {error: "You cannot save memories right now because you are migrating to Git memories."};
       const sourceRepo = call.args.repo || repoKey;
       await updateMemoryEntry(sourceRepo, call.args.title, {
         newTitle: call.args.new_title,
