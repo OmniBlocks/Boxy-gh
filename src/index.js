@@ -378,13 +378,20 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
   if (!textBody.includes(mentionHandle) && isComment) return;
 
   if (textBody.trim() === `${mentionHandle} notebook dump`) {
-    const myNotebook = JSON.stringify(await loadNotebook());
-    return await context.octokit.rest.issues.createComment({
+    await context.octokit.rest.issues.createComment({
       owner: repo.owner,
       repo: repo.repo,
       issue_number: context.payload.issue.number,
-      body: `Hello @${author}, here is my notebook as of ${new Date().toLocaleDateString()}. This is for migrating to Git memories. PLEASE DELETE THIS COMMAND FROM THE CODE WHEN DONE\n\n\`\`\`json\n${myNotebook}\n\`\`\``
+      body: `@${author}, I will now dump the items of my notebook.`
+    }); 
+    const myNotebook = await loadNotebook();
+    await context.octokit.rest.issues.createComment({
+      owner: repo.owner,
+      repo: repo.repo,
+      issue_number: context.payload.issue.number,
+      body: `Hello @${author}, here is my notebook as of ${new Date().toLocaleDateString()}. This is for migrating to Git memories. PLEASE DELETE THIS COMMAND FROM THE CODE WHEN DONE\n\n\`\`\`json\n${JSON.stringify(myNotebook, null, '\t')}\n\`\`\``
     });
+    return;
   }
   if (textBody.trim() === `${mentionHandle} review` && isPullRequest) {
     // Asynchronicity is beautiful, isn't it?
