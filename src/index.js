@@ -383,7 +383,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
       owner: repo.owner,
       repo: repo.repo,
       issue_number: context.payload.issue.number,
-      body: "Hello meatbag, here is my notebook dump. This is for migrating to Git memories. PLEASE DELETE THIS COMMAND FROM THE CODE WHEN DONE\n\n```json\n${myNotebook}\n```"
+      body: `Hello @${author}, here is my notebook as of ${new Date().toLocaleDateString()}. This is for migrating to Git memories. PLEASE DELETE THIS COMMAND FROM THE CODE WHEN DONE\n\n\`\`\`json\n${myNotebook}\n\`\`\``
     });
   }
   if (textBody.trim() === `${mentionHandle} review` && isPullRequest) {
