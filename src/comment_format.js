@@ -1,5 +1,9 @@
 export const RUN_DETAILS_MARKER = "<!-- boxy-run-details -->";
-export const RUN_DETAILS_SUMMARY = "😈 Boxy's evil plans";
+const today = new Date();
+const isAprilFools = today.getMonth() === 3 && (today.getDate() === 1 || today.getDate() === 2);
+export const RUN_DETAILS_SUMMARY = isAprilFools ? "😈 Boxy's evil plans" : "🧾 Boxy's run details";
+
+
 
 /**
  * Let's wrap it up
