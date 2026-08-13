@@ -379,11 +379,11 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
 
   if (textBody.trim() === `${mentionHandle} review` && isPullRequest) {
     // Asynchronicity is beautiful, isn't it?
-    await Promise.all([
+    return await Promise.all([
       startCodeReview(context, app),
       reactToUserComment(context, app, 'eyes'),
     ]);
-    return;
+  
   }
 
   const cleanedComment = textBody.replace(/[.,#!$%\^&\*;:{}=\-_`~?]/g, "").trim();
