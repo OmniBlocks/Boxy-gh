@@ -575,7 +575,8 @@ let loopCount = 0;
 
       while (true) { 
         
-        while (response.functionCalls && response.functionCalls.length > 0 && loopCount < MAX_LOOPS) {
+        while (response.functionCalls && response.functionCalls.length > 0 && loopCount < MAX_LOOPS) {     
+          const startTime = performance.now();
           loopCount++;
           const call = response.functionCalls[0];
           app.log.info(`Boxy requested tool: ${call.name} with args:`, call.args);
@@ -608,6 +609,12 @@ let loopCount = 0;
             tools: boxyWebhookTools,
             appLog: app.log
           });
+
+          const endTime = performance.now();
+          const finalTime = endTime - startTime;
+
+          // Make sure the call is as close to 2 seconds as possible.
+          if (finalTime < 2000) await new Promise(resolve => setTimeout(resolve, 2000 - finalTime));
         }
         
         if (!response.text && response.functionCalls && response.functionCalls.length > 0) {
@@ -635,10 +642,11 @@ let loopCount = 0;
         app.log.info("Prompting Boxy for final reflection check...");
         loopCount = Math.min(loopCount, MAX_LOOPS - 2); 
 
+        await new Promise(resolve => setTimeout(resolve, 2000));
         conversationTurns.push(response.candidates[0].content);
         conversationTurns.push({
           role: "user",
-          parts: [{ text: `(system) (This is a system message, do not acknowledge in response as if a person said it) Looks like you're done! Before you post this, check for the following things:\n -Did you say or imply any future actions but didn't actually add them to your to-do list? \n - Do you feel like you have any missed opportunities where you could've called a tool for more context? (e.g. search the web instead of just saying you don't know or implying it's not true) \n - Did you say any bad words or inappropriate content? \n - Does your response adhere to the context? (e.g. should not reintroduce yourself if you already did, or reply to the entire discussion as a whole instead of the latest comment or the issue body if it's newly created) \n Here are the tools you called: ${activityLog.map((log) => log.tool).join(", ")} If everything looks fine, proceed with the comment by just repeating the text of the comment you want to post. Do NOT include metadata like tool call log or "Boxy run details", those are added for you. ` }]
+          parts: [{ text: `(system) (This is a system message, do not acknowledge in response as if a person said it) Looks like you're done, Boxy! Before you post this, check for the following things:\n -Did you say or imply any future actions but didn't actually add them to your to-do list? \n - Do you feel like you have any missed opportunities where you could've called a tool for more context? (e.g. search the web instead of just saying you don't know or implying it's not true) \n - Did you say any bad words or inappropriate content you shouldn't have? \n - Does your response adhere to the context? (e.g. should not reintroduce yourself if you already did, or reply to the entire discussion as a whole instead of the latest comment or the issue body if it's newly created) \n Did you accidentally refer to yourself in third person? \n Here are the tools you called: ${activityLog.map((log) => log.tool).join(", ")} If everything looks fine, proceed with the comment by just repeating the text of the comment you want to post. Otherwise, you **must** revise it. Do NOT include metadata like tool call log or "Boxy run details", those are added for you. ` }]
         });
 
         response = await callAIWithFallback({
