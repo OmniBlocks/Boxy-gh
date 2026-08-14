@@ -571,50 +571,56 @@ let loopCount = 0;
       const MAX_LOOPS = 10;
       const activityLog = [];
       let hasReflected = false;
+      let msToWait = 500;
       app.log.info(conversationTurns);
 
       while (true) { 
-        
         while (response.functionCalls && response.functionCalls.length > 0 && loopCount < MAX_LOOPS) {     
-          const startTime = performance.now();
-          loopCount++;
-          const call = response.functionCalls[0];
-          app.log.info(`Boxy requested tool: ${call.name} with args:`, call.args);
+          try {
+            const startTime = performance.now();
+            loopCount++;
+            const call = response.functionCalls[0];
+            app.log.info(`Boxy requested tool: ${call.name} with args:`, call.args);
 
-          const toolResult = await executeTool(call, context, app, activityLog, authorRole);
+            const toolResult = await executeTool(call, context, app, activityLog, authorRole);
 
-          conversationTurns.push(response.candidates[0].content);
+            conversationTurns.push(response.candidates[0].content);
 
-          if (loopCount == 8) {
+            if (loopCount == 8) {
+              conversationTurns.push({
+                role: "user",
+                parts: [{ text: "(system) You have made 8 tool calls in a row. Are you sure this isn't something best to be saved for later in the todo list? " }]
+              });
+            }
+            if (loopCount >= 9) {
+              conversationTurns.push({
+                role: "user",
+                parts: [{ text: "(system) You have made over 9 tool calls in a row. You only have 1 left before you hit the limit! " }]
+              });
+            }
+
             conversationTurns.push({
               role: "user",
-              parts: [{ text: "(system) You have made 8 tool calls in a row. Are you sure this isn't something best to be saved for later in the todo list? " }]
+              parts: [{ functionResponse: { name: call.name, response: toolResult, id: call.id } }]
             });
-          }
-          if (loopCount >= 9) {
-            conversationTurns.push({
-              role: "user",
-              parts: [{ text: "(system) You have made over 9 tool calls in a row. You only have 1 left before you hit the limit! " }]
+
+            app.log.info("Sending tool results back to Gemini...");
+            response = await callAIWithFallback({
+              contents: conversationTurns,
+              tools: boxyWebhookTools,
+              appLog: app.log
             });
+
+            const endTime = performance.now();
+            const finalTime = endTime - startTime;
+
+            // Wait only for the amount we actually need to.
+            if (finalTime < msToWait) await new Promise(resolve => setTimeout(resolve, msToWait - finalTime));
+          } catch (e) {
+            // Try desperately one more time if the API has terrible ratelimits for some reason, or if it errored.
+            if (msToWait === 5000) throw e;
+            msToWait = 5000;
           }
-
-          conversationTurns.push({
-            role: "user",
-            parts: [{ functionResponse: { name: call.name, response: toolResult, id: call.id } }]
-          });
-
-          app.log.info("Sending tool results back to Gemini...");
-          response = await callAIWithFallback({
-            contents: conversationTurns,
-            tools: boxyWebhookTools,
-            appLog: app.log
-          });
-
-          const endTime = performance.now();
-          const finalTime = endTime - startTime;
-
-          // Make sure the call is as close to 2 seconds as possible.
-          if (finalTime < 2000) await new Promise(resolve => setTimeout(resolve, 2000 - finalTime));
         }
         
         if (!response.text && response.functionCalls && response.functionCalls.length > 0) {

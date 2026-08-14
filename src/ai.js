@@ -4,6 +4,7 @@ import { OpenRouter } from "@openrouter/sdk";
 import Groq from "groq-sdk"; 
 import { convertContentsToMessages } from './review.js';
 import { buildRunDetailsBlock, formatTokenUsage, formatModelIdentification } from './comment_format.js';
+import { redactSecrets } from "./safety_filter.js";
 
 
 function parseProviderList(value) {
@@ -194,7 +195,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
     throw new Error("No AI providers are enabled. Check BOXY_ENABLED_PROVIDERS / BOXY_DISABLED_PROVIDERS.");
   }
 
-  let lastError = null;
+  let errorsForLog = [];
 
   for (const provider of providersToUse) {
     // log provider and model regardless of failure so i can know what stupid model the script is calling
@@ -1330,7 +1331,8 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
       if (appLog) {
         appLog.warn(`Provider ${provider.name} failed. Error: ${err.message}`);
       }
-      lastError = err;
+      // This is formatted for direct inclusion.
+      errorsForLog.push(` Provider ${provider.name} failed. Error: ${redactSecrets(err.message)}`); // Paranoia be like...
 
       if (err.message?.includes("429") || err.message?.includes("RESOURCE_EXHAUSTED")) {
         const nextProvider = providers[providers.indexOf(provider) + 1];
@@ -1343,7 +1345,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
     }
   }
 
-  throw new Error(`All AI providers failed. Last error: ${lastError ? lastError.message : "Unknown! You probably didn't provide any API keys."}`);
+  throw new Error(`All AI providers failed. Errors:\n${errorsForLog.length ? errorsForLog.join('\n') : "Unknown! You probably didn't provide any API keys."}`);
 }
 export function getElapsedSeconds(startTime) {
   return ((Date.now() - startTime) / 1000).toFixed(1);
