@@ -623,7 +623,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
-        const textWithHeader = appendModelIdentification(`${formattedText}\n\n*<sub>Used ${provider.name}</sub>*`, provider.model, data.usage);
+        const finalText = appendModelIdentification(formattedText, provider.model, data.usage);
 
         return {
           functionCalls,
@@ -636,7 +636,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
               finishReason: choice.finish_reason === "stop" ? "STOP" : (choice.finish_reason === "tool_calls" ? "STOP" : choice.finish_reason)
             }
           ],
-          text: textWithHeader
+          text: finalText
         };
       }
 
