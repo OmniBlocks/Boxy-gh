@@ -156,7 +156,6 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
     { name: "pollinations-kimi-k2.7-code", type: "pollinations", model: "sharktide/inferenceport-ai-kimi-k2.7-code" },    
     { name: "pollinations-kimi-2.5", type: "pollinations", model: "sharktide/inferenceport-ai-kimi-k2.5" },
     { name: "pollinations-step-flash-3.5", type: "pollinations", model: "Spit-fires/step-3.5-flash-free" },
-    { name: "command-a-plus-05-2026", type: "cohere", model: "command-a-plus-05-2026", useBackup: false },
     { name: "groq-llama-3.3-70b-versatile", type: "groq", model: "llama-3.3-70b-versatile", useBackup: false },
     { name: "groq-llama-3.1-8b-instant", type: "groq", model: "llama-3.1-8b-instant", useBackup: false },
     { name: "openrouter-nemotron-3-super", type: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
@@ -165,6 +164,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
     { name: "pollinations-gemma-slightly-more-expensive", type: "pollinations", model: "MarcosFRG/gemma-4-31b" },
     { name: "cerebras-gemma-4-31b", type: "cerebras", model: "gemma-4-31b" },
     { name: "pollinations-kimi-k3", type: "pollinations", model: "vendouple/kimi-k3" },
+    { name: "command-a-plus-05-2026", type: "cohere", model: "command-a-plus-05-2026", useBackup: false },
     //{ name: "hyperbolic-llama-3.3-70b", type: "hyperbolic", model: "meta-llama/Llama-3.3-70B-Instruct" },
     //{ name: "siliconflow-qwen-2.5-72b", type: "siliconflow", model: "Qwen/Qwen2.5-72B-Instruct" }
   ];
