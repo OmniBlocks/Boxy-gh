@@ -158,9 +158,9 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
     { name: "pollinations-step-flash-3.5", type: "pollinations", model: "Spit-fires/step-3.5-flash-free" },
     { name: "groq-llama-3.3-70b-versatile", type: "groq", model: "llama-3.3-70b-versatile", useBackup: false },
     { name: "groq-llama-3.1-8b-instant", type: "groq", model: "llama-3.1-8b-instant", useBackup: false },
-    { name: "openrouter-nemotron-3-super", type: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
+    /*{ name: "openrouter-nemotron-3-super", type: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
     { name: "openrouter-qwen-coder", type: "openrouter", model: "qwen/qwen3-coder:free" },
-    { name: "openrouter-gemma-4-31b-a4b-it", type: "openrouter", model: "google/gemma-4-31b-it:free" },
+    { name: "openrouter-gemma-4-31b-a4b-it", type: "openrouter", model: "google/gemma-4-31b-it:free" },*/
     { name: "pollinations-gemma-slightly-more-expensive", type: "pollinations", model: "MarcosFRG/gemma-4-31b" },
     { name: "cerebras-gemma-4-31b", type: "cerebras", model: "gemma-4-31b" },
     { name: "pollinations-kimi-k3", type: "pollinations", model: "vendouple/kimi-k3" },
