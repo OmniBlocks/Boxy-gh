@@ -685,7 +685,7 @@ let loopCount = 0;
       app.log.error("ERROR inside processing block:", error.message);
       try {
         // some models keep throwing giant errors that end up destroying boxy's context window
-        const errorlog = (error.stack || error.message).substring(0, 30000);
+        const errorlog = String(error.stack || error.message).substring(0, 30000);
       return await createCommentForContext(context, "i broke 💔💔💔 error <details><summary>Error Details</summary><pre>" + errorlog + "</pre></details>");
       } catch (err) {
         try {
