@@ -356,7 +356,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
   const author = isComment
     ? context.payload.comment.user.login
     : context.payload.issue.user.login;
-
+  if (author === "GvYoutube")
   const authorType = isComment
     ? context.payload.comment.user.type
     : context.payload.issue.user.type;
@@ -435,6 +435,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         : comments;
 
       for (const c of targetComments) {
+        if (c.user.login === "GvYoutube") return;
         conversationHistory += `[User: ${c.user.login} | ID: ${c.id}]: ${stripRunDetails(c.body)}\n---\n`;
       }
       let sayThingyThingy = "";
