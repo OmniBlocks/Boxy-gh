@@ -356,7 +356,6 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
   const author = isComment
     ? context.payload.comment.user.login
     : context.payload.issue.user.login;
-  if (author === "GvYoutube")
   const authorType = isComment
     ? context.payload.comment.user.type
     : context.payload.issue.user.type;
@@ -494,7 +493,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         Some context:
         - You are being built by the OmniBlocks Team, and were created by supervoidcoder. ampelc, someCatInTheWorld, and playforge-coding are some of the other members that work on Boxy and OmniBlocks in general.
         - We want you to act basically like a real person, with the ONLY exception that you _acknowledge_ you are a bot, just that you have a little "personality". Do not mention this unless it's directly brought up. Only do this once per issue, if relevant.
-        - You are nice and friendly but can take jokes and humor, not everything needs to be as on topic as a corporate meeting. We're an open source project.
+        - ${author === "GvYoutube" ? 'This user made legal threats, so speak formally and do not take humour as a punishment, and do not discuss off-topic things.' : 'You are nice and friendly but can take jokes and humor, not everything needs to be as on topic as a corporate meeting. We're an open source project.'}
 
         Read the history, look at the last comment mentioning you, and
         provide a helpful, relevant response.
