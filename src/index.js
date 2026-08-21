@@ -349,7 +349,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
   const isComment = isIssueComment || isDiscussion;
   const { owner: currentOwner, repo: currentRepo } = context.repo();
   
-  const mentionHandles = ["@OmniBlocks/boxy", "@BoxyCPU", `@${currentOwner}/boxy`];
+  const mentionHandles = ["@OmniBlocks/boxy", "@BoxyCPU", `@${currentOwner}/boxy`, "@boxycpu"];
   // i'm NOT  refactoring the code to loop through mentionhandles every time lol
   
 
