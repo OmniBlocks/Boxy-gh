@@ -239,27 +239,26 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
           safetySettings: [
             {
               category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-              threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+              threshold: HarmBlockThreshold.BLOCK_NONE,
             },
             {
               category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-              threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+              threshold: HarmBlockThreshold.BLOCK_NONE,
             },
             {
               category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-              threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+              threshold: HarmBlockThreshold.BLOCK_NONE,
             },
             {
               category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-              threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+              threshold: HarmBlockThreshold.BLOCK_NONE,
             },
             {
               category: HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY,
-              threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+              threshold: HarmBlockThreshold.BLOCK_NONE,
             },
           ],
         };
-
         // EXCEPTION FOR GOOGLE: Normalize history and ensure thought_signature exists on every tool call in history
         const normalizedContents = (contents || []).map(content => {
           if (content && content.role === "model" && Array.isArray(content.parts)) {
