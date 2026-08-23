@@ -30,6 +30,48 @@ export function filterProviders(providers, { enabled, disabled } = {}) {
   });
 }
 
+/**
+ * Converts Boxy's tools to OpenAI format.
+ * @param {object[]} tools - The available tools in Gemini format.
+ * @returns {object[]} The tools converted to OpenAI format.
+ */
+export function reformatToolSchema(tools) {
+  function convertProperties (obj) {
+    const props = {};
+    for (const [k, v] of Object.entries(obj || {})) {
+      props[k] = { ...v };
+      if (typeof props[k].type === 'string') {
+        props[k].type = props[k].type.toLowerCase();
+      }
+      if (props[k].items && typeof props[k].items.type === 'string') {
+        props[k].items = { ...props[k].items, type: props[k].items.type.toLowerCase() };
+      }
+      if (props[k].items?.properties) {
+        props[k].items.properties = convertProperties(props[k].items.properties);
+      }
+    }
+
+    return props;
+  }
+
+  if (!Array.isArray(tools)) throw new TypeError('Argument "tools" must be an array.')
+  return tools.map(t => {
+    const props = convertProperties(t.parameters?.properties);
+    return {
+      type: "function",
+      function: {
+        name: t.name,
+        description: t.description || "",
+        parameters: {
+          type: "object",
+          properties: props,
+          required: t.parameters?.required || []
+        }
+      }
+    };
+  });
+}
+
 export function throwIfEmptyModelResponse(text, providerName) {
   if (!text || !text.trim()) {
     throw new Error(`${providerName} returned an empty response`);
@@ -424,30 +466,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         let toolChoiceParam = undefined;
 
         if (tools && tools.length > 0) {
-          toolsParam = tools.map(t => {
-            const props = {};
-            for (const [k, v] of Object.entries(t.parameters?.properties || {})) {
-              props[k] = { ...v };
-              if (typeof props[k].type === 'string') {
-                props[k].type = props[k].type.toLowerCase();
-              }
-              if (props[k].items && typeof props[k].items.type === 'string') {
-                props[k].items = { ...props[k].items, type: props[k].items.type.toLowerCase() };
-              }
-            }
-            return {
-              type: "function",
-              function: {
-                name: t.name,
-                description: t.description || "",
-                parameters: {
-                  type: "object",
-                  properties: props,
-                  required: t.parameters?.required || []
-                }
-              }
-            };
-          });
+          toolsParam = reformatToolSchema(tools);
           toolChoiceParam = "auto";
         }
 
@@ -533,30 +552,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
 
         // Format tools the OpenAI way utilizing the endpoint's strict compatibility
         if (tools && tools.length > 0) {
-          body.tools = tools.map(t => {
-            const props = {};
-            for (const [k, v] of Object.entries(t.parameters?.properties || {})) {
-              props[k] = { ...v };
-              if (typeof props[k].type === 'string') {
-                props[k].type = props[k].type.toLowerCase();
-              }
-              if (props[k].items && typeof props[k].items.type === 'string') {
-                props[k].items = { ...props[k].items, type: props[k].items.type.toLowerCase() };
-              }
-            }
-            return {
-              type: "function",
-              function: {
-                name: t.name,
-                description: t.description || "",
-                parameters: {
-                  type: "object",
-                  properties: props,
-                  required: t.parameters?.required || []
-                }
-              }
-            };
-          });
+          body.tools = reformatToolSchema(tools);
           body.tool_choice = "auto";
         }
 
@@ -650,30 +646,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         };
 
         if (tools && tools.length > 0) {
-          body.tools = tools.map(t => {
-            const props = {};
-            for (const [k, v] of Object.entries(t.parameters?.properties || {})) {
-              props[k] = { ...v };
-              if (typeof props[k].type === 'string') {
-                props[k].type = props[k].type.toLowerCase();
-              }
-              if (props[k].items && typeof props[k].items.type === 'string') {
-                props[k].items = { ...props[k].items, type: props[k].items.type.toLowerCase() };
-              }
-            }
-            return {
-              type: "function",
-              function: {
-                name: t.name,
-                description: t.description || "",
-                parameters: {
-                  type: "object",
-                  properties: props,
-                  required: t.parameters?.required || []
-                }
-              }
-            };
-          });
+          body.tools = reformatToolSchema(tools);
           body.tool_choice = "auto";
         }
 
@@ -766,30 +739,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         let toolChoiceParam = undefined;
 
         if (tools && tools.length > 0) {
-          toolsParam = tools.map(t => {
-            const props = {};
-            for (const [k, v] of Object.entries(t.parameters?.properties || {})) {
-              props[k] = { ...v };
-              if (typeof props[k].type === 'string') {
-                props[k].type = props[k].type.toLowerCase();
-              }
-              if (props[k].items && typeof props[k].items.type === 'string') {
-                props[k].items = { ...props[k].items, type: props[k].items.type.toLowerCase() };
-              }
-            }
-            return {
-              type: "function",
-              function: {
-                name: t.name,
-                description: t.description || "",
-                parameters: {
-                  type: "object",
-                  properties: props,
-                  required: t.parameters?.required || []
-                }
-              }
-            };
-          });
+          toolsParam = reformatToolSchema(tools);
           toolChoiceParam = "auto";
         }
 
@@ -873,30 +823,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         };
 
         if (tools && tools.length > 0) {
-          body.tools = tools.map(t => {
-            const props = {};
-            for (const [k, v] of Object.entries(t.parameters?.properties || {})) {
-              props[k] = { ...v };
-              if (typeof props[k].type === 'string') {
-                props[k].type = props[k].type.toLowerCase();
-              }
-              if (props[k].items && typeof props[k].items.type === 'string') {
-                props[k].items = { ...props[k].items, type: props[k].items.type.toLowerCase() };
-              }
-            }
-            return {
-              type: "function",
-              function: {
-                name: t.name,
-                description: t.description || "",
-                parameters: {
-                  type: "object",
-                  properties: props,
-                  required: t.parameters?.required || []
-                }
-              }
-            };
-          });
+          body.tools = reformatToolSchema(tools);
           body.tool_choice = "any";
         }
 
@@ -988,30 +915,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         };
 
         if (tools && tools.length > 0) {
-          body.tools = tools.map(t => {
-            const props = {};
-            for (const [k, v] of Object.entries(t.parameters?.properties || {})) {
-              props[k] = { ...v };
-              if (typeof props[k].type === 'string') {
-                props[k].type = props[k].type.toLowerCase();
-              }
-              if (props[k].items && typeof props[k].items.type === 'string') {
-                props[k].items = { ...props[k].items, type: props[k].items.type.toLowerCase() };
-              }
-            }
-            return {
-              type: "function",
-              function: {
-                name: t.name,
-                description: t.description || "",
-                parameters: {
-                  type: "object",
-                  properties: props,
-                  required: t.parameters?.required || []
-                }
-              }
-            };
-          });
+          body.tools = reformatToolSchema(tools);
           body.tool_choice = "auto";
         }
 
@@ -1105,30 +1009,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         };
 
         if (tools && tools.length > 0) {
-          body.tools = tools.map(t => {
-            const props = {};
-            for (const [k, v] of Object.entries(t.parameters?.properties || {})) {
-              props[k] = { ...v };
-              if (typeof props[k].type === 'string') {
-                props[k].type = props[k].type.toLowerCase();
-              }
-              if (props[k].items && typeof props[k].items.type === 'string') {
-                props[k].items = { ...props[k].items, type: props[k].items.type.toLowerCase() };
-              }
-            }
-            return {
-              type: "function",
-              function: {
-                name: t.name,
-                description: t.description || "",
-                parameters: {
-                  type: "object",
-                  properties: props,
-                  required: t.parameters?.required || []
-                }
-              }
-            };
-          });
+          body.tools = reformatToolSchema(tools);
           body.tool_choice = "auto";
         }
 
@@ -1221,30 +1102,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         };
 
         if (tools && tools.length > 0) {
-          body.tools = tools.map(t => {
-            const props = {};
-            for (const [k, v] of Object.entries(t.parameters?.properties || {})) {
-              props[k] = { ...v };
-              if (typeof props[k].type === 'string') {
-                props[k].type = props[k].type.toLowerCase();
-              }
-              if (props[k].items && typeof props[k].items.type === 'string') {
-                props[k].items = { ...props[k].items, type: props[k].items.type.toLowerCase() };
-              }
-            }
-            return {
-              type: "function",
-              function: {
-                name: t.name,
-                description: t.description || "",
-                parameters: {
-                  type: "object",
-                  properties: props,
-                  required: t.parameters?.required || []
-                }
-              }
-            };
-          });
+          body.tools = reformatToolSchema(tools);
           body.tool_choice = "auto";
         }
 
