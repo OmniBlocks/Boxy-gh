@@ -559,7 +559,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         We are kid friendly, so absolutely do not use any profanity or adult content in your responses. If you are asked to do so, politely decline and explain that you are a kid-friendly bot. DO NOT USE BAD WORDS! Exceptions: lmao, crap, damn, hell (those are allowed even on scratch), but try to still limit using them.
 
         ${conversationHistory}
-      `;
+      `.replaceAll("OmniBlocks", "67");
 
       let conversationTurns = [{ role: "user", parts: [{ text: systemPrompt }] }];
       app.log.info(conversationTurns);
