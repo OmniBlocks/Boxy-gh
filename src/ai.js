@@ -172,7 +172,7 @@ export function appendModelIdentification(text, model, usage) {
 
   return body ? `${runDetails}\n\n${body}` : runDetails;
 }
-export async function callAIWithFallback({ contents, tools, appLog, needsBigBrain = false }) {
+export async function callAIWithFallback({ contents, tools, appLog, needsBigBrain = false, needsPedantic = false}) {
   // needs big brain is optional param for when stronk models for thinking reviews or smth
 
   const providers = [    
@@ -223,8 +223,18 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
     { name: "gemini-3.6-flash-backup", type: "google", model: "gemini-3.6-flash", useBackup: true }
 
   ];
+
+  const pedanticProviders = [
+  { name: "mistral-codestral", type: "mistral", model: "codestral", useBackup: false }
+    // add more here later or something (when we arent broke)
+    ]
   
-  const allProviders = needsBigBrain ? bigBrainProviders : providers;
+  const allProviders = needsBigBrain 
+  ? bigBrainProviders 
+  : needsPedantic 
+    ? pedanticProviders 
+    : providers;
+  
   const providersToUse = filterProviders(allProviders);
 
   const skippedCount = allProviders.length - providersToUse.length;
