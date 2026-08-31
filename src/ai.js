@@ -1213,6 +1213,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         };
         headers["CF-Access-Client-ID"] = ObAiId;
         headers["CF-Access-Client-Secret"] = ObAiSecret;
+        headers["Authorization"] = "Bearer ollama"; // just in case its probably not necessary though
         // after that we can just call it like any other OpenAI compatible API
         const res = await fetch("https://ai.omniblocks.org/v1/chat/completions", {
           method: "POST",
