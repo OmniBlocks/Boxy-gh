@@ -6,11 +6,11 @@
 
 install pnpm if you haven't already (it's better than npm trust)
 ```sh
-node runboxy.js
+node runboxy.js # this uses pnpm start under the hood and handles pulling updates and restarting, but it will not restart by itself if the computer restarts or you Ctrl+C the terminal 
 ```
 
 use pm2 if you want to keep it on forever
-we may provide an npm package in the future and you better like it (whether you like it or not)
+we may provide an npm package in the future to make it easier and you better like it (whether you like it or not)
 
 ## Contributing
 
@@ -20,4 +20,4 @@ For more, check out the [Contributing Guide](CONTRIBUTING.md).
 
 ## License
 
-[GPL-3.0](LICENSE) © 2026 supervoidcoder
+[AGPL-3.0](LICENSE) © 2026 The OmniBlocks Team
