@@ -4,23 +4,13 @@
 
 ## Setup
 
+install pnpm if you haven't already (it's better than npm trust)
 ```sh
-# Install dependencies
-npm install
-
-# Run the bot
-npm start
+node runboxy.js
 ```
 
-## Docker
-
-```sh
-# 1. Build container
-docker build -t boxy .
-
-# 2. Start container
-docker run -e APP_ID=<app-id> -e PRIVATE_KEY=<pem-value> boxy
-```
+use pm2 if you want to keep it on forever
+we may provide an npm package in the future and you better like it (whether you like it or not)
 
 ## Contributing
 
