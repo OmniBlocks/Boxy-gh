@@ -1189,36 +1189,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         };
       } 
 
-      if (provider.type === "cerebras") {
-        if (!process.env.CEREBRAS_API_KEY) {
-          continue;
-        }
-
-        const aiCerebras = new Cerebras({ apiKey: process.env.CEREBRAS_API_KEY });
-        const messages = convertContentsToMessages(contents);
-
-        const response = await aiCerebras.chat.completions.create({
-          model: provider.model,
-          messages
-        });
-
-        const message = response.choices?.[0]?.message;
-        if (!message) {
-          throw new Error("Empty choice content received from Cerebras");
-        }
-
-        const text = message.content || "";
-        throwIfEmptyModelResponse(text, `Cerebras provider ${provider.name}`);
-        const elapsedSeconds = getElapsedSeconds(startTime);
-        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model, response.usage);
-        const contextText = stripReasoningArtifacts(text);
-
-        return {
-          functionCalls: [],
-          candidates: [{ content: { role: "model", parts: [{ text: contextText }] } }],
-          text: formattedText
-        };
-      } 
+  
       if (provider.type === "omniblocks") {
         // unlike the other providers, omniblocks needs two credentials in .env, which are OMNIBLOCKS_AI_ID and OMNIBLOCKS_AI_SECRET
         const ObAiId = process.env.OMNIBLOCKS_AI_ID;
@@ -1240,7 +1211,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         const headers = {
           "Content-Type": "application/json"
         };
-        headers["CF-Access-Client-Id"] = ObAiId;
+        headers["CF-Access-Client-ID"] = ObAiId;
         headers["CF-Access-Client-Secret"] = ObAiSecret;
         // after that we can just call it like any other OpenAI compatible API
         const res = await fetch("https://ai.omniblocks.org/v1/chat/completions", {
