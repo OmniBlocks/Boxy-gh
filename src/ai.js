@@ -247,18 +247,213 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
     try {
       appLog && appLog.info(`Currently trying: ${provider.name} with model: ${provider.model}`);
       if (provider.type === "google") {
-        
+        if (provider.useBackup ? !process.env.GEMINI_BACKUP_KEY : !process.env.GEMINI_API_KEY) {
+          continue;
+        }
+
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const aiBackup = new GoogleGenAI({ apiKey: process.env.GEMINI_BACKUP_KEY });
+
+        const client = provider.useBackup && aiBackup ? aiBackup : ai;
+
+        let toolList = tools && tools.length > 0 
+          ? [{ functionDeclarations: tools }] 
+          : [];
+
+        if (!provider.model.startsWith("gemini-3")) {
+          toolList.push({ codeExecution: {} });
+          toolList.push({ googleSearch: {} });
+        }
+
+        if (toolList.length === 0) {
+          toolList = undefined;
+        }
+        let thinkingLvl = "minimal";
+
+       
+        const config = {
+          tools: toolList,
+          toolConfig: {
+            includeServerSideToolInvocations: true
+          },
+          thinkingConfig: {
+            includeThoughts: true,
+            thinkingLevel: thinkingLvl
+          },
+          safetySettings: [
+            {
+              category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+              threshold: HarmBlockThreshold.BLOCK_NONE,
+            },
+            {
+              category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+              threshold: HarmBlockThreshold.BLOCK_NONE,
+            },
+            {
+              category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+              threshold: HarmBlockThreshold.BLOCK_NONE,
+            },
+            {
+              category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+              threshold: HarmBlockThreshold.BLOCK_NONE,
+            },
+            {
+              category: HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY,
+              threshold: HarmBlockThreshold.BLOCK_NONE,
+            },
+          ],
+        };
+        // EXCEPTION FOR GOOGLE: Normalize history and ensure thought_signature exists on every tool call in history
+        const normalizedContents = (contents || []).map(content => {
+          if (content && content.role === "model" && Array.isArray(content.parts)) {
+            const parts = content.parts.map(part => {
+              if (part && part.functionCall) {
+                const sig = part.functionCall.thoughtSignature || part.functionCall.thought_signature || part.thoughtSignature || "";
+                return {
+                  ...part,
+                  functionCall: {
+                    ...part.functionCall,
+                    thoughtSignature: sig,
+                    thought_signature: sig
+                  }
+                };
+              }
+              return part;
+            });
+            return { ...content, parts };
+          }
+          return content;
+        });
+
+        const response = await client.models.generateContent({
+          model: provider.model,
+          contents: normalizedContents,
+          config: config
+        });
+
+        const parts = response.candidates?.[0]?.content?.parts || [];
+
+        // Ensure real Gemini 3 thinking signatures are preserved on the returned parts and function calls
+        for (const part of parts) {
+          if (part && part.functionCall) {
+            const sig = part.functionCall.thoughtSignature || part.functionCall.thought_signature || part.thoughtSignature;
+            if (sig) {
+              part.functionCall.thought_signature = sig;
+              part.functionCall.thoughtSignature = sig;
+            }
+          }
+        }
+
+        const functionCalls = parts
+          .filter(part => part && part.functionCall)
+          .map(part => part.functionCall);
+
+        if (functionCalls.length === 0 && response.functionCalls) {
+          functionCalls.push(...response.functionCalls);
+        }
+
+        let answerText = "";
+        for (const part of parts) {
+          if (part.text && !part.thought) {
+            answerText += part.text;
+          }
+        }
+
+        let extraText = "";
+        for (const part of parts) {
+          if (part.executableCode && part.executableCode.code) {
+            extraText += `\n\n**Code Execution:**\n\`\`\`python\n${part.executableCode.code}\n\`\`\`\n`;
+          }
+          if (part.codeExecutionResult && part.codeExecutionResult.output) {
+            extraText += `**Output:**\n\`\`\`\n${part.codeExecutionResult.output}\n\`\`\`\n`;
+          }
+          if (part.inlineData && part.inlineData.data && part.inlineData.mimeType && part.inlineData.mimeType.startsWith('image/')) {
+            try {
+              const buffer = Buffer.from(part.inlineData.data, 'base64');
+              const blob = new Blob([buffer], { type: part.inlineData.mimeType });
+              const formData = new FormData();
+              formData.append('api_key', process.env.IMGHIPPO_API_KEY);
+              formData.append('file', blob, 'graph.png');
+
+              const uploadRes = await fetch('https://api.imghippo.com/v1/upload', {
+                method: 'POST',
+                body: formData
+              });
+              const uploadJson = await uploadRes.json();
+
+              if (uploadJson.success) {
+                extraText += `\n![Generated Graph](${uploadJson.data.url})\n`;
+              } else if (appLog) {
+                appLog.warn(`ImgHippo upload failed: ${JSON.stringify(uploadJson)}`);
+              }
+            } catch (e) {
+              if (appLog) appLog.warn(`Failed to upload graph to ImgHippo: ${e.message}`);
+            }
+          }
+        }
+
+        if (extraText) {
+          answerText += extraText;
+        }
+
+        if (functionCalls.length === 0 && !answerText.trim()) {
+          throwIfEmptyModelResponse(answerText, `Google provider ${provider.name}`);
+        }
+
+        const elapsedSeconds = getElapsedSeconds(startTime);
+        const formattedText = appendModelIdentification(formatGoogleCommentText(parts, elapsedSeconds), provider.model, response.usageMetadata);
+
+        return {
+          functionCalls,
+          candidates: response.candidates || [
+            {
+              content: {
+                role: "model",
+                parts: parts.length > 0 ? parts : [{ text: answerText }]
+              }
+            }
+          ],
+          text: formattedText
+        };
+      }
+      if (provider.type === "cerebras") {
+        if (!process.env.CEREBRAS_API_KEY) {
+          continue;
+        }
+
+        const aiCerebras = new Cerebras({ apiKey: process.env.CEREBRAS_API_KEY });
+
+        const messages = convertContentsToMessages(contents);
+
+        const response = await aiCerebras.chat.completions.create({
+          model: provider.model,
+          messages
+        });
+
+        const message = response.choices?.[0]?.message;
+
+        if (!message) {
+          throw new Error("Empty choice content received from Cerebras");
+        }
+
+        const text = message.content || "";
+        throwIfEmptyModelResponse(text, `Cerebras provider ${provider.name}`);
+        const elapsedSeconds = getElapsedSeconds(startTime);
+        const formattedText = appendModelIdentification(sanitizeModelCommentText(text, elapsedSeconds), provider.model, response.usage);
+
+        const contextText = stripReasoningArtifacts(text);
+
         return {
           functionCalls: [],
           candidates: [
             {
               content: {
                 role: "model",
-                parts: [{ text: "contextText" }]
+                parts: [{ text: contextText }]
               }
             }
           ],
-          text: "formattedText"
+          text: formattedText
         };
       } 
       if (provider.type === "groq") {
