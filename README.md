@@ -21,3 +21,5 @@ For more, check out the [Contributing Guide](CONTRIBUTING.md).
 ## License
 
 [AGPL-3.0](LICENSE) © 2026 The OmniBlocks Team
+OmniBlocks™ and Boxy™ are trademarks of the OmniBlocks Team. The art design for the Boxy mascot is ©2025-2026 The OmniBlocks Team, all rights reserved.
+The rest of the code and assets are licensed under the AGPLv3 license unless otherwise noted.
