@@ -584,7 +584,7 @@ let loopCount = 0;
             const startTime = performance.now();
             loopCount++;
             const call = response.functionCalls[0];
-            app.log.info(`Boxy requested tool: ${call.name} with args:`, call.args);
+            app.log.info(`Boxy requested tool: ${call.name} with args: ${JSON.stringify(call.args)}`);
 
             const toolResult = await executeTool(call, context, app, activityLog, authorRole);
 

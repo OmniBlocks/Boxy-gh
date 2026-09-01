@@ -449,44 +449,79 @@ export function stripRunDetails(body) {
   return stripRunDetailsBlock(body).replace(ACTIVITY_LOG_BLOCK, "").trim();
 }
 
-export async function webSearch(query) {
+async function tavilySearch(query) {
   const apiKey = process.env.TAVILY_API_KEY;
-  if (!apiKey) {
-    return { error: "NO TAVILY KEY " };
+  if (!apiKey) return null;
+
+  const response = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      api_key: apiKey,
+      query: query,
+      search_depth: "basic",
+      include_answer: true,
+      max_results: 6,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Tavily API responded with status ${response.status}: ${response.statusText}`);
   }
 
-  try {
-    const response = await fetch("https://api.tavily.com/search", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        api_key: apiKey,
-        query: query,
-        search_depth: "basic",  
-        include_answer: true,
-        max_results: 6,
-      }),
-    });
+  const data = await response.json();
 
-    if (!response.ok) {
-      throw new Error(`Tavily API responded with status ${response.status}: ${response.statusText}`);
+  return {
+    answer: data.answer || null,
+    results: data.results?.map(r => ({
+      title: r.title,
+      url: r.url,
+      snippet: r.content,
+    })) || [],
+  };
+}
+
+async function firecrawlWebSearch(query) {
+  if (!hasFirecrawl()) return null;
+  const { results } = await firecrawlSearch(query, 6);
+  return { answer: null, results };
+}
+
+const SEARCH_PROVIDERS = {
+  firecrawl: firecrawlWebSearch,
+  tavily: tavilySearch,
+};
+
+const DEFAULT_SEARCH_ORDER = ["firecrawl", "tavily"];
+
+export async function webSearch(query) {
+  const configured = (process.env.BOXY_SEARCH_PROVIDER || "")
+    .split(",")
+    .map((name) => name.trim().toLowerCase())
+    .filter((name) => Object.hasOwn(SEARCH_PROVIDERS, name));
+  const order = configured.length ? configured : DEFAULT_SEARCH_ORDER;
+
+  const failures = [];
+  for (const name of order) {
+    try {
+      const result = await SEARCH_PROVIDERS[name](query);
+      if (!result) continue;
+      if (!result.results.length && !result.answer) {
+        failures.push(`${name} returned no results`);
+        continue;
+      }
+      return { ...result, provider: name };
+    } catch (err) {
+      failures.push(`${name}: ${err.message}`);
     }
-
-    const data = await response.json();
-
-    return {
-      answer: data.answer || null,
-      results: data.results?.map(r => ({
-        title: r.title,
-        url: r.url,
-        snippet: r.content,
-      })) || [],
-    };
-  } catch (err) {
-    return { error: `Web search failed: ${err.message}` };
   }
+
+  if (!failures.length) {
+    return { error: "No web search provider is configured. Set FIRECRAWL_API_KEY or TAVILY_API_KEY." };
+  }
+  return { error: `Web search failed (${failures.join("; ")}).` };
 }
 export async function executeTool(call, context, app, activityLog, authorRole = "MEMBER") {
   let toolResult = {};
