@@ -282,7 +282,7 @@ export async function handleReviewCommentReply(context, app) {
 
     // Fetch original PR description, diff, and all comment threads
     const prDescription = await context.octokit.rest.pulls.get({ owner, repo, pull_number: prNum });
-    const diff;
+    let diff;
     try {
      diff = await context.octokit.rest.pulls.get({ owner, repo, pull_number: prNum, mediaType: { format: "diff" } });
     } catch (err) {
