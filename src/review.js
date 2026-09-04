@@ -286,7 +286,7 @@ export async function handleReviewCommentReply(context, app) {
     try {
      diff = await context.octokit.rest.pulls.get({ owner, repo, pull_number: prNum, mediaType: { format: "diff" } });
     } catch (err) {
-    diff = `The diff could not be retrieved due to an error: ${err}`;
+      diff = { data: `The diff could not be retrieved due to an error: ${err}` };
 
     }
 
