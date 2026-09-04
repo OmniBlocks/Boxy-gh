@@ -207,7 +207,7 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
        - Then, a short poem from your perspective (Boxy) about the PR. The poem should be in quote blocks like > under a small #### heading. Wrap it in a details tag.
        - Finally, the screenshots under a heading exactly called "### GUI Screenshots".  If a Live PR Preview link is provided in your context, include it as a clickable link right above the screenshots! This link is what allows other people to test the PR's changes before they are merged into the main build of the site. It must be wrapped in a details tag. If there are no screenshots, this means the tests found no changes in the GUI (or broke the build). If there are no screenshots or preview link (e.g. you are running in a non-monorepo without this workflow), skip this section entirely.
        - (optional) Slop and Spam detection: If you feel that the PR is slop or spam (such as the pr title/description and diff making absolutely no sense) you can make an optional heading at the top called Slop Detected and explain your reasoning wrapped in a quote block with a [!WARNING] markdown feature. If it's not, then just don't add this section at all. An example is changing an automated status check to "passed" because of an old issue asking for a status update on OmniBlocks itself (yes, this really happened).
-    5. Write down a detailed audit of the PR in a notebook entry. In the title, write "PR #${prNum} Repo: ${reviewRepoKey} Branch: ${prBranch}". In the content, write everything about the PR along with everything you found and everything you may need to remember in a future review of this PR. If you see a notebook entry listed above that already has this title, please READ IT FIRST so that you can be caught up on your old review, and update it by simply using save_memory again with the updated content and the EXACT same title. Remember, NOBODY can see your notebook entries except YOU, and they are meant for YOU to see, unlike inline comments, pr summary, or finish review. They're so incremental reviews don't become awkward with you acting as if it's a PR you've never seen before.
+    5. Write down a detailed audit of the PR in a notebook entry. In the title, write "PR #${prNum} Repo: ${reviewRepoKey} Branch: ${prBranch}". In the content, write everything about the PR along with everything you found and everything you may need to remember in a future review of this PR. If you see a notebook entry listed above that already has this title, please READ IT FIRST so that you can be caught up on your old review, and update it by simply using save_memory again with the updated content and the EXACT same title. Remember, NOBODY can see your notebook entries except YOU, and they are meant for YOU to see, unlike inline comments, pr summary, or finish review. They're so incremental reviews don't become awkward with you acting as if it's a PR you've never seen before. When you write down an entry, write down the commit sha INSIDE THE CONTENT (not the title) of the entry. This is so you can compare it to a new commit if you had reviewed a previous commit.
 
     6. Finally, use 'finish_pr_review' with APPROVE, REQUEST_CHANGES, or COMMENT to submit your final decision. When you do this, include a shorter summary of your findings with the main things that need to be changed, since you already gave the detailed summary with 'update_pr_summary'. With this tool, instead of summarizing what the PR does or changes, this is your time to give what actually needs to change among other things. Basically, just don't repeat what you already said in the main summary. Also ping the pr author with a @mention. 
 
@@ -282,7 +282,13 @@ export async function handleReviewCommentReply(context, app) {
 
     // Fetch original PR description, diff, and all comment threads
     const prDescription = await context.octokit.rest.pulls.get({ owner, repo, pull_number: prNum });
-    const diff = await context.octokit.rest.pulls.get({ owner, repo, pull_number: prNum, mediaType: { format: "diff" } });
+    const diff;
+    try {
+     diff = await context.octokit.rest.pulls.get({ owner, repo, pull_number: prNum, mediaType: { format: "diff" } });
+    } catch (err) {
+    diff = `The diff could not be retrieved due to an error: ${err}`;
+
+    }
 
     const reviewComments = await context.octokit.paginate(
       context.octokit.rest.pulls.listReviewComments,
