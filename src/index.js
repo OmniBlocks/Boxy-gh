@@ -435,7 +435,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         : comments;
 
       for (const c of targetComments) {
-        conversationHistory += `[User: ${c.user.login} | ID: ${c.id}]: ${stripRunDetails(c.body)}\n---\n`;
+        conversationHistory += `[User: ghost | ID: ${c.id}]: ${stripRunDetails(c.body)}\n---\n`;
       }
       let sayThingyThingy = "";
       if (isComment) {
