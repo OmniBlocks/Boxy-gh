@@ -178,7 +178,10 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
   const providers = [    
     { name: "gemini-3.5-flash-lite", type: "google", model: "gemini-3.5-flash-lite", useBackup: false },
     { name: "gemini-3.1-flash-lite", type: "google", model: "gemini-3.1-flash-lite", useBackup: false },
+    { name: "ollama-gemma4-31b", type: "ollama", model: "gemma4:31b" },
     { name: "novita-macaron-v1-tall", type: "novita", model: "mindai/macaron-v1-tall" },
+    { name: "ollama-gpt-oss-120b", type: "ollama", model: "gpt-oss:120b" },
+    { name: "ollama-gpt-oss-20b", type: "ollama", model: "gpt-oss:20b" },
     { name: "novita-deepseek-v3.1", type: "novita", model: "deepseek/deepseek-v3.1" },
     { name: "novita-glm-4.5", type: "novita", model: "zai-org/glm-4.5" },
     { name: "novita-llama-3.3-70b", type: "novita", model: "meta-llama/llama-3.3-70b-instruct" },
@@ -1192,7 +1195,104 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
           text: formattedText
         };
       } 
+      if (provider.type === "ollama") {
+        if (!process.env.OLLAMA_API_KEY) {
+          continue;
+        }
 
+        const messages = convertContentsToMessages(contents);
+        const body = {
+          model: provider.model,
+          messages: messages
+        };
+
+        if (tools && tools.length > 0) {
+          body.tools = reformatToolSchema(tools);
+          body.tool_choice = "auto";
+        }
+
+        const headers = {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.OLLAMA_API_KEY}`
+        };
+
+        const res = await fetch("https://api.ollama.com/v1/chat/completions", {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body)
+        });
+
+        if (!res.ok) {
+          throw new Error(`Ollama Cloud Status ${res.status}: ${await res.text()}`);
+        }
+
+        const data = await res.json();
+        const choice = data.choices?.[0];
+        const message = choice?.message;
+
+        if (!message) {
+          throw new Error("Empty choice content received from Ollama Cloud API");
+        }
+
+        const text = message.content || "";
+        const reasoning = message.reasoning_content || null;
+        const functionCalls = [];
+        const parts = [];
+
+        if (message.tool_calls && message.tool_calls.length > 0) {
+          for (const tc of message.tool_calls) {
+            if (tc.type === "function") {
+              let parsedArgs = {};
+              try {
+                parsedArgs = typeof tc.function.arguments === "string"
+                  ? JSON.parse(tc.function.arguments)
+                  : tc.function.arguments;
+              } catch (e) {
+                parsedArgs = tc.function.arguments;
+              }
+              const fc = {
+                name: tc.function.name,
+                args: parsedArgs,
+                id: tc.id
+              };
+              functionCalls.push(fc);
+              parts.push({ functionCall: fc });
+            }
+          }
+        } else {
+          parts.push({ text });
+        }
+
+        if (functionCalls.length === 0) {
+          throwIfEmptyModelResponse(text, `Ollama provider ${provider.name}`);
+        }
+
+        const elapsedSeconds = getElapsedSeconds(startTime);
+        const formattedText = appendModelIdentification(
+          sanitizeModelCommentText(text, elapsedSeconds, reasoning),
+          provider.model,
+          data?.usage
+        );
+        const contextParts = parts.map(part => (
+          part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
+        ));
+
+        return {
+          functionCalls,
+          candidates: [
+            {
+              content: {
+                role: "model",
+                parts: contextParts
+              },
+              finishReason: choice.finish_reason === "stop" || choice.finish_reason === "tool_calls" 
+                ? "STOP" 
+                : choice.finish_reason
+            }
+          ],
+          text: formattedText
+        };
+      }
   
       if (provider.type === "omniblocks") {
         // unlike the other providers, omniblocks needs two credentials in .env, which are OMNIBLOCKS_AI_ID and OMNIBLOCKS_AI_SECRET

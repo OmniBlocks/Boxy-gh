@@ -856,7 +856,7 @@ export default (app, { addHandler }) => {
 
   const aiEndpoint = express.Router();
   aiEndpoint.use(express.json());
-  aiEndpoint.post("/llm", async (req, res) => {
+  aiEndpoint.post(["/llm", "/llm/"], async (req, res) => {
 
   // for a simple ai endpoint that we could use for inference. it doesn't need streaming nor should it ever do so
   // i'm mainly doing to wrap the callAI function so that I can use it in the moderation api , doesn't need to be too complex for now and we can expand later
@@ -897,7 +897,9 @@ export default (app, { addHandler }) => {
 
     }
   });
-  addHandler(aiEndpoint);
+  addHandler((req, res) => {
+      aiEndpoint(req, res, () => {});
+    });
   } catch (e) {
 const trace = e.stack || e.message;
 app.log.error(trace, "AN ERROR OCCURRED");
