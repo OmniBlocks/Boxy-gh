@@ -856,6 +856,14 @@ export default (app, { addHandler }) => {
 
   const aiEndpoint = express();
   aiEndpoint.use(express.json());
+  aiEndpoint.use((err, req, res, next) => {
+    if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+      app.log.error("JSON Parse Error:", err.message);
+      return res.status(400).json({ error: "Your JSON sucks. try again when you learn how to send a json request." });
+    }
+    next(err);
+  });
+    
   aiEndpoint.post(["/llm", "/llm/"], async (req, res) => {
 
   // for a simple ai endpoint that we could use for inference. it doesn't need streaming nor should it ever do so
