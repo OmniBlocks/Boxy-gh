@@ -854,7 +854,7 @@ export default (app, { addHandler }) => {
     handleReviewCommentReply(context, app);
   });
 
-  const aiEndpoint = express.Router();
+  const aiEndpoint = express();
   aiEndpoint.use(express.json());
   aiEndpoint.post(["/llm", "/llm/"], async (req, res) => {
 
@@ -897,9 +897,7 @@ export default (app, { addHandler }) => {
 
     }
   });
-  addHandler((req, res) => {
-      aiEndpoint(req, res, () => {});
-    });
+  addHandler(aiEndpoint);
   } catch (e) {
 const trace = e.stack || e.message;
 app.log.error(trace, "AN ERROR OCCURRED");
