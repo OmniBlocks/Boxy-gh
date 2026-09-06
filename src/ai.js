@@ -224,7 +224,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
   ];
   
   const allProviders = needsBigBrain ? bigBrainProviders : providers;
-  const providersToUse = filterProviders(allProviders);
+  let providersToUse = filterProviders(allProviders);
 
   const skippedCount = allProviders.length - providersToUse.length;
   if (skippedCount > 0 && appLog) {
