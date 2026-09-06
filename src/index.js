@@ -5,6 +5,7 @@ import { loadNotebook, loadTodoList, loadReviews, loadStickyNotes, REVERT_FILE }
 import { callAIWithFallback } from "./ai.js";
 import { executeTool, boxyWebhookTools, boxyBackgroundTools, prependActivityLog, stripRunDetails } from "./tools.js"; 
 import { triggerCodeReview, handleWorkflowCompleted, handleReviewCommentReply } from './review.js';
+import express from "express";
 const workflowEvents = new EventEmitter();
 
 
@@ -728,7 +729,7 @@ let loopCount = 0;
 /**
  * @param {import('probot').Probot} app
  */
-export default (app, { getRouter }) => {
+export default (app, { addHandler }) => {
   try {
   startBackgroundQueue(app);
   complainIfSkillIssue(app);
@@ -853,9 +854,9 @@ export default (app, { getRouter }) => {
     handleReviewCommentReply(context, app);
   });
 
-  const aiEndpoint = app.route("/llm");
+  const aiEndpoint = express.Router();
   aiEndpoint.use(express.json());
-  aiEndpoint.post("/", async (req, res) => {
+  aiEndpoint.post("/llm", async (req, res) => {
 
   // for a simple ai endpoint that we could use for inference. it doesn't need streaming nor should it ever do so
   // i'm mainly doing to wrap the callAI function so that I can use it in the moderation api , doesn't need to be too complex for now and we can expand later
@@ -896,6 +897,7 @@ export default (app, { getRouter }) => {
 
     }
   });
+  addHandler(aiEndpoint);
   } catch (e) {
 const trace = e.stack || e.message;
 app.log.error(trace, "AN ERROR OCCURRED");
