@@ -853,7 +853,7 @@ export default (app, { getRouter }) => {
     handleReviewCommentReply(context, app);
   });
 
-  const aiEndpoint = getRouter("/llm");
+  const aiEndpoint = app.route("/llm");
   aiEndpoint.use(express.json());
   aiEndpoint.post("/", async (req, res) => {
 
