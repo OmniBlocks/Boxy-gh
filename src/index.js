@@ -895,19 +895,25 @@ export default (app, { addHandler }) => {
         customModel: customModel || ""
       });
 
-      return res.status(200).json({ response });
+      if (!res.headersSent) {
+        return res.status(200).json({ response });
+      }
 
     }
     catch (err) {
       app.log.error("Error in /llm endpoint:", err.message);
-      return res.status(500).json({ error: `Something broke on our end. It's our fault. Try again later. If this keeps happening, please let us know at https://github.com/OmniBlocks/Boxy-gh/issues/new. Error: ${err.message}` });
+      if (!res.headersSent) {
+        return res.status(500).json({ error: `Something broke on our end. It's our fault. Try again later. If this keeps happening, please let us know at https://github.com/OmniBlocks/Boxy-gh/issues/new. Error: ${err.message}` });
+      }
       // lol idk why i wrote it so public facing if no one public is really gonna use this
 
     }
   });
   addHandler((req, res, next) => {
       if (req.url.startsWith("/llm")) {
-        return aiEndpoint(req, res);
+        return aiEndpoint(req, res, (err) => {
+          if (err) next(err);
+        });
       }
       next();
     });
