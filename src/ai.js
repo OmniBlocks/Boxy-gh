@@ -172,14 +172,12 @@ export function appendModelIdentification(text, model, usage) {
 
   return body ? `${runDetails}\n\n${body}` : runDetails;
 }
-export async function callAIWithFallback({ contents, tools, appLog, needsBigBrain = false }) {
+export async function callAIWithFallback({ contents, tools, appLog, needsBigBrain = false, customModel = "" }) {
   // needs big brain is optional param for when stronk models for thinking reviews or smth
 
   const providers = [    
     { name: "gemini-3.5-flash-lite", type: "google", model: "gemini-3.5-flash-lite", useBackup: false },
     { name: "gemini-3.1-flash-lite", type: "google", model: "gemini-3.1-flash-lite", useBackup: false },
-    { name: "gemma4:31b-mlx-bf16", type: "omniblocks", model: "gemma4:31b-mlx-bf16", useBackup: false },
-    { name: "gpt-oss:120b", type: "omniblocks", model: "gpt-oss:120b", useBackup: false },
     { name: "novita-macaron-v1-tall", type: "novita", model: "mindai/macaron-v1-tall" },
     { name: "novita-deepseek-v3.1", type: "novita", model: "deepseek/deepseek-v3.1" },
     { name: "novita-glm-4.5", type: "novita", model: "zai-org/glm-4.5" },
@@ -200,8 +198,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
     { name: "pollinations-kimi-k2.7-code", type: "pollinations", model: "sharktide/inferenceport-ai-kimi-k2.7-code" },    
     { name: "pollinations-kimi-2.5", type: "pollinations", model: "sharktide/inferenceport-ai-kimi-k2.5" },
     { name: "pollinations-step-flash-3.5", type: "pollinations", model: "Spit-fires/step-3.5-flash-free" },
-    { name: "groq-llama-3.3-70b-versatile", type: "groq", model: "llama-3.3-70b-versatile", useBackup: false },
-    { name: "groq-llama-3.1-8b-instant", type: "groq", model: "llama-3.1-8b-instant", useBackup: false },
+    { name: "groq-openai/gpt-oss-safeguard-20b", type: "groq", model: "openai/gpt-oss-safeguard-20b", useBackup: false },
     /*{ name: "openrouter-nemotron-3-super", type: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
     { name: "openrouter-qwen-coder", type: "openrouter", model: "qwen/qwen3-coder:free" },
     { name: "openrouter-gemma-4-31b-a4b-it", type: "openrouter", model: "google/gemma-4-31b-it:free" },*/
@@ -238,11 +235,14 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
     throw new Error("No AI providers are enabled. Check BOXY_ENABLED_PROVIDERS / BOXY_DISABLED_PROVIDERS.");
   }
 
+  let imAFailure = false;
   let errorsForLog = [];
 
   for (const provider of providersToUse) {
     // log provider and model regardless of failure so i can know what stupid model the script is calling
- 
+    if (customModel !== "" && provider.model !== customModel) {
+      provider.model = customModel;
+    }
     const startTime = Date.now();
     try {
       appLog && appLog.info(`Currently trying: ${provider.name} with model: ${provider.model}`);
@@ -1307,6 +1307,9 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
       }
     }
+  }
+  if (customModel !== "" && !imAFailure) {
+    throw new Error(`Custom model ${customModel} failed. Errors:\n${errorsForLog.length ? errorsForLog.join('\n') : "Unknown! There are probably no API keys for the model you selected you selected."}`);
   }
 
   throw new Error(`All AI providers failed. Errors:\n${errorsForLog.length ? errorsForLog.join('\n') : "Unknown! You probably didn't provide any API keys."}`);

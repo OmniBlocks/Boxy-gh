@@ -850,9 +850,54 @@ export default (app) => {
   app.on("pull_request_review_comment.created", async (context) => {
     handleReviewCommentReply(context, app);
   });
+
+  const aiEndpoint = getRouter("/llm");
+  aiEndpoint.use(express.json());
+  aiEndpoint.post("/", async (req, res) => {
+
+  // for a simple ai endpoint that we could use for inference. it doesn't need streaming nor should it ever do so
+  // i'm mainly doing to wrap the callAI function so that I can use it in the moderation api , doesn't need to be too complex for now and we can expand later
+    try {
+      if (!req.body || Object.keys(req.body).length === 0) {
+        return res.status(400).json({ error: "Your request is empty!" });
+      }
+      const { contents, customModel } = req.body;
+      if (!contents || !Array.isArray(contents)) {
+        return res.status(400).json({ error: "Invalid request body. 'contents' must be an array." });
+      }
+      if (customModel && typeof customModel !== "string") {
+        return res.status(400).json({ error: "Invalid request body. 'customModel' must be a string." });
+      }
+      
+      app.log.info("Received request to /llm endpoint with contents:", contents);
+      if (customModel) {
+        app.log.info(`A custom model was requested: ${customModel}`);
+      }
+      if (!contents || contents.length === 0) {
+        return res.status(400).json({ error: "The 'contents' array is empty." });
+      } 
+      const response = await callAIWithFallback({
+        contents,
+        // no tools
+        tools: [],
+        appLog: app.log,
+        customModel: customModel || null
+      });
+
+      return res.status(200).json({ response });
+
+    }
+    catch (err) {
+      app.log.error("Error in /llm endpoint:", err.message);
+      return res.status(500).json({ error: `Something broke on our end. It's our fault. Try again later. If this keeps happening, please let us know at https://github.com/OmniBlocks/Boxy-gh/issues/new. Error: ${err.message}` });
+      // lol idk why i wrote it so public facing if no one public is really gonna use this
+
+    }
+  });
   } catch (e) {
 const trace = e.stack || e.message;
 app.log.error(trace, "AN ERROR OCCURRED");
  process.exit(1);
   }
+
 };
