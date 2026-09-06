@@ -234,15 +234,19 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
   if (providersToUse.length === 0) {
     throw new Error("No AI providers are enabled. Check BOXY_ENABLED_PROVIDERS / BOXY_DISABLED_PROVIDERS.");
   }
+   if (customModel && typeof customModel === "string" && customModel.trim() !== "") {
+    const target = customModel.trim();
+    providersToUse = providersToUse.filter(p => p.model === target || p.name === target);
+    if (providersToUse.length === 0) {
+      throw new Error(`No provider supports custom model "${target}".`);
+    }
+  }
 
-  let imAFailure = false;
   let errorsForLog = [];
 
   for (const provider of providersToUse) {
     // log provider and model regardless of failure so i can know what stupid model the script is calling
-    if (customModel !== "" && provider.model !== customModel) {
-      provider.model = customModel;
-    }
+     
     const startTime = Date.now();
     try {
       appLog && appLog.info(`Currently trying: ${provider.name} with model: ${provider.model}`);
@@ -1308,9 +1312,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
       }
     }
   }
-  if (customModel !== "" && !imAFailure) {
-    throw new Error(`Custom model ${customModel} failed. Errors:\n${errorsForLog.length ? errorsForLog.join('\n') : "Unknown! There are probably no API keys for the model you selected you selected."}`);
-  }
+  
 
   throw new Error(`All AI providers failed. Errors:\n${errorsForLog.length ? errorsForLog.join('\n') : "Unknown! You probably didn't provide any API keys."}`);
 }

@@ -726,7 +726,7 @@ let loopCount = 0;
 /**
  * @param {import('probot').Probot} app
  */
-export default (app) => { 
+export default (app, { getRouter }) => {
   try {
   startBackgroundQueue(app);
   complainIfSkillIssue(app);
@@ -873,7 +873,7 @@ export default (app) => {
       if (customModel) {
         app.log.info(`A custom model was requested: ${customModel}`);
       }
-      if (!contents || contents.length === 0) {
+      if (contents.length === 0) {
         return res.status(400).json({ error: "The 'contents' array is empty." });
       } 
       const response = await callAIWithFallback({
@@ -881,7 +881,7 @@ export default (app) => {
         // no tools
         tools: [],
         appLog: app.log,
-        customModel: customModel || null
+        customModel: customModel || ""
       });
 
       return res.status(200).json({ response });
