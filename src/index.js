@@ -905,7 +905,12 @@ export default (app, { addHandler }) => {
 
     }
   });
-  addHandler(aiEndpoint);
+  addHandler((req, res, next) => {
+      if (req.url.startsWith("/llm")) {
+        return aiEndpoint(req, res);
+      }
+      next();
+    });
   } catch (e) {
 const trace = e.stack || e.message;
 app.log.error(trace, "AN ERROR OCCURRED");
