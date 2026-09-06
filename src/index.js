@@ -909,14 +909,12 @@ export default (app, { addHandler }) => {
 
     }
   });
-  addHandler((req, res, next) => {
-      if (req.url.startsWith("/llm")) {
-        return aiEndpoint(req, res, (err) => {
-          if (err) next(err);
-        });
-      }
-      next();
-    });
+ addHandler((req, res) => {
+    if (req.url.startsWith("/llm")) {
+      aiEndpoint(req, res);
+      return true;  
+    }
+  });
   } catch (e) {
 const trace = e.stack || e.message;
 app.log.error(trace, "AN ERROR OCCURRED");
