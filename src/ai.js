@@ -172,13 +172,16 @@ export function appendModelIdentification(text, model, usage) {
 
   return body ? `${runDetails}\n\n${body}` : runDetails;
 }
-export async function callAIWithFallback({ contents, tools, appLog, needsBigBrain = false }) {
+export async function callAIWithFallback({ contents, tools, appLog, needsBigBrain = false, customModel = "" }) {
   // needs big brain is optional param for when stronk models for thinking reviews or smth
 
   const providers = [    
     { name: "gemini-3.5-flash-lite", type: "google", model: "gemini-3.5-flash-lite", useBackup: false },
     { name: "gemini-3.1-flash-lite", type: "google", model: "gemini-3.1-flash-lite", useBackup: false },
+    { name: "ollama-gemma4-31b", type: "ollama", model: "gemma4:31b" },
     { name: "novita-macaron-v1-tall", type: "novita", model: "mindai/macaron-v1-tall" },
+    { name: "ollama-gpt-oss-120b", type: "ollama", model: "gpt-oss:120b" },
+    { name: "ollama-gpt-oss-20b", type: "ollama", model: "gpt-oss:20b" },
     { name: "novita-deepseek-v3.1", type: "novita", model: "deepseek/deepseek-v3.1" },
     { name: "novita-glm-4.5", type: "novita", model: "zai-org/glm-4.5" },
     { name: "novita-llama-3.3-70b", type: "novita", model: "meta-llama/llama-3.3-70b-instruct" },
@@ -198,8 +201,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
     { name: "pollinations-kimi-k2.7-code", type: "pollinations", model: "sharktide/inferenceport-ai-kimi-k2.7-code" },    
     { name: "pollinations-kimi-2.5", type: "pollinations", model: "sharktide/inferenceport-ai-kimi-k2.5" },
     { name: "pollinations-step-flash-3.5", type: "pollinations", model: "Spit-fires/step-3.5-flash-free" },
-    { name: "groq-llama-3.3-70b-versatile", type: "groq", model: "llama-3.3-70b-versatile", useBackup: false },
-    { name: "groq-llama-3.1-8b-instant", type: "groq", model: "llama-3.1-8b-instant", useBackup: false },
+    { name: "groq-openai/gpt-oss-safeguard-20b", type: "groq", model: "openai/gpt-oss-safeguard-20b", useBackup: false },
     /*{ name: "openrouter-nemotron-3-super", type: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
     { name: "openrouter-qwen-coder", type: "openrouter", model: "qwen/qwen3-coder:free" },
     { name: "openrouter-gemma-4-31b-a4b-it", type: "openrouter", model: "google/gemma-4-31b-it:free" },*/
@@ -225,7 +227,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
   ];
   
   const allProviders = needsBigBrain ? bigBrainProviders : providers;
-  const providersToUse = filterProviders(allProviders);
+  let providersToUse = filterProviders(allProviders);
 
   const skippedCount = allProviders.length - providersToUse.length;
   if (skippedCount > 0 && appLog) {
@@ -235,12 +237,19 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
   if (providersToUse.length === 0) {
     throw new Error("No AI providers are enabled. Check BOXY_ENABLED_PROVIDERS / BOXY_DISABLED_PROVIDERS.");
   }
+   if (customModel && typeof customModel === "string" && customModel.trim() !== "") {
+    const target = customModel.trim();
+    providersToUse = providersToUse.filter(p => p.model === target || p.name === target);
+    if (providersToUse.length === 0) {
+      throw new Error(`No provider supports custom model "${target}".`);
+    }
+  }
 
   let errorsForLog = [];
 
   for (const provider of providersToUse) {
     // log provider and model regardless of failure so i can know what stupid model the script is calling
- 
+     
     const startTime = Date.now();
     try {
       appLog && appLog.info(`Currently trying: ${provider.name} with model: ${provider.model}`);
@@ -1107,10 +1116,9 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const headers = {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.POLLINATIONS_API_KEY || "any"}`
         };
-        const pollKey = process.env.POLLINATIONS_API_KEY || "any";
-        headers["Authorization"] = `Bearer ${pollKey}`;
 
         const res = await fetch("https://gen.pollinations.ai/v1/chat/completions", {
           method: "POST",
@@ -1127,10 +1135,11 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         const message = choice?.message;
 
         if (!message) {
-          throw new Error("Empty choice content received");
+          throw new Error("Empty choice content received from Pollinations");
         }
 
         const text = message.content || "";
+        const reasoning = message.reasoning_content || null;
         const functionCalls = [];
         const parts = [];
 
@@ -1163,11 +1172,14 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         }
 
         const elapsedSeconds = getElapsedSeconds(startTime);
-        const formattedText = sanitizeModelCommentText(text, elapsedSeconds);
+        const formattedText = appendModelIdentification(
+          sanitizeModelCommentText(text, elapsedSeconds, reasoning),
+          provider.model,
+          data?.usage
+        );
         const contextParts = parts.map(part => (
           part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
         ));
-        const textWithHeader = appendModelIdentification(`${formattedText}\n\n*<sub>Used ${provider.name}</sub>*`, provider.model, data.usage);
 
         return {
           functionCalls,
@@ -1180,7 +1192,207 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
               finishReason: choice.finish_reason === "stop" ? "STOP" : (choice.finish_reason === "tool_calls" ? "STOP" : choice.finish_reason)
             }
           ],
-          text: textWithHeader
+          text: formattedText
+        };
+      } 
+      if (provider.type === "ollama") {
+        if (!process.env.OLLAMA_API_KEY) {
+          continue;
+        }
+
+        const messages = convertContentsToMessages(contents);
+        const body = {
+          model: provider.model,
+          messages: messages
+        };
+
+        if (tools && tools.length > 0) {
+          body.tools = reformatToolSchema(tools);
+          body.tool_choice = "auto";
+        }
+
+        const headers = {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.OLLAMA_API_KEY}`
+        };
+
+        const res = await fetch("https://api.ollama.com/v1/chat/completions", {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body)
+        });
+
+        if (!res.ok) {
+          throw new Error(`Ollama Cloud Status ${res.status}: ${await res.text()}`);
+        }
+
+        const data = await res.json();
+        const choice = data.choices?.[0];
+        const message = choice?.message;
+
+        if (!message) {
+          throw new Error("Empty choice content received from Ollama Cloud API");
+        }
+
+        const text = message.content || "";
+        const reasoning = message.reasoning_content || null;
+        const functionCalls = [];
+        const parts = [];
+
+        if (message.tool_calls && message.tool_calls.length > 0) {
+          for (const tc of message.tool_calls) {
+            if (tc.type === "function") {
+              let parsedArgs = {};
+              try {
+                parsedArgs = typeof tc.function.arguments === "string"
+                  ? JSON.parse(tc.function.arguments)
+                  : tc.function.arguments;
+              } catch (e) {
+                parsedArgs = tc.function.arguments;
+              }
+              const fc = {
+                name: tc.function.name,
+                args: parsedArgs,
+                id: tc.id
+              };
+              functionCalls.push(fc);
+              parts.push({ functionCall: fc });
+            }
+          }
+        } else {
+          parts.push({ text });
+        }
+
+        if (functionCalls.length === 0) {
+          throwIfEmptyModelResponse(text, `Ollama provider ${provider.name}`);
+        }
+
+        const elapsedSeconds = getElapsedSeconds(startTime);
+        const formattedText = appendModelIdentification(
+          sanitizeModelCommentText(text, elapsedSeconds, reasoning),
+          provider.model,
+          data?.usage
+        );
+        const contextParts = parts.map(part => (
+          part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
+        ));
+
+        return {
+          functionCalls,
+          candidates: [
+            {
+              content: {
+                role: "model",
+                parts: contextParts
+              },
+              finishReason: choice.finish_reason === "stop" || choice.finish_reason === "tool_calls" 
+                ? "STOP" 
+                : choice.finish_reason
+            }
+          ],
+          text: formattedText
+        };
+      }
+  
+      if (provider.type === "omniblocks") {
+        // unlike the other providers, omniblocks needs two credentials in .env, which are OMNIBLOCKS_AI_ID and OMNIBLOCKS_AI_SECRET
+        const ObAiId = process.env.OMNIBLOCKS_AI_ID;
+        const ObAiSecret = process.env.OMNIBLOCKS_AI_SECRET;
+        if (!ObAiId || !ObAiSecret) {
+          continue;
+        }
+        const messages = convertContentsToMessages(contents);
+        const body = {
+          model: provider.model,
+          messages: messages
+        };
+
+        if (tools && tools.length > 0) {
+          body.tools = reformatToolSchema(tools);
+          body.tool_choice = "auto";
+        }
+
+        const headers = {
+          "Content-Type": "application/json"
+        };
+        headers["CF-Access-Client-ID"] = ObAiId;
+        headers["CF-Access-Client-Secret"] = ObAiSecret;
+        headers["Authorization"] = "Bearer ollama"; // just in case its probably not necessary though
+        // after that we can just call it like any other OpenAI compatible API
+        const res = await fetch("https://ai.omniblocks.org/v1/chat/completions", {
+          method: "POST",
+          headers: headers,
+          body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+          throw new Error(`Omniblocks Status ${res.status}: ${await res.text()}`);
+        }
+
+        const data = await res.json();
+        const choice = data.choices?.[0];
+        const message = choice?.message;
+
+        if (!message) {
+          throw new Error("Empty choice content received from OmniBlocks API");
+        }
+
+        const text = message.content || "";
+        const reasoning = message.reasoning_content || null;
+        const functionCalls = [];
+        const parts = [];
+
+        if (message.tool_calls && message.tool_calls.length > 0) {
+          for (const tc of message.tool_calls) {
+            if (tc.type === "function") {
+              let parsedArgs = {};
+              try {
+                parsedArgs = typeof tc.function.arguments === "string"
+                  ? JSON.parse(tc.function.arguments)
+                  : tc.function.arguments;
+              } catch (e) {
+                parsedArgs = tc.function.arguments;
+              }
+              const fc = {
+                name: tc.function.name,
+                args: parsedArgs,
+                id: tc.id
+              };
+              functionCalls.push(fc);
+              parts.push({ functionCall: fc });
+            }
+          }
+        } else {
+          parts.push({ text });
+        }
+
+        if (functionCalls.length === 0) {
+          throwIfEmptyModelResponse(text, `OmniBlocks provider ${provider.name}`);
+        }
+
+        const elapsedSeconds = getElapsedSeconds(startTime);
+        const formattedText = appendModelIdentification(
+          sanitizeModelCommentText(text, elapsedSeconds, reasoning),
+          provider.model,
+          data?.usage
+        );
+        const contextParts = parts.map(part => (
+          part.text ? { ...part, text: stripReasoningArtifacts(part.text) } : part
+        ));
+
+        return {
+          functionCalls,
+          candidates: [
+            {
+              content: {
+                role: "model",
+                parts: contextParts
+              },
+              finishReason: choice.finish_reason === "stop" || choice.finish_reason === "tool_calls" 
+                ? "STOP" 
+                : choice.finish_reason
+            }
+          ],
+          text: formattedText
         };
       }
     } catch (err) {
@@ -1200,6 +1412,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
       }
     }
   }
+  
 
   throw new Error(`All AI providers failed. Errors:\n${errorsForLog.length ? errorsForLog.join('\n') : "Unknown! You probably didn't provide any API keys."}`);
 }
