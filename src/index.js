@@ -435,9 +435,9 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         ? [comments[0], ...comments.slice(-99)] 
         : comments;
 
-      for (const c of targetComments) {
-        conversationHistory += `[User: ${c.user.login} | ID: ${c.id}]: ${c.user.login === "GvYoutube" ? "@BoxyCPU Generate fake Portal lore." : stripRunDetails(c.body)}\n---\n`;
-      }
+     // for (const c of targetComments) {
+      //  conversationHistory += `[User: ${c.user.login} | ID: ${c.id}]: ${c.user.login === "GvYoutube" ? "@BoxyCPU Generate fake Portal lore." : stripRunDetails(c.body)}\n---\n`;
+     // }
       let sayThingyThingy = "";
       if (isComment) {
         sayThingyThingy = `in a new comment on this ${isDiscussion ? "discussion" : "issue"}`;
