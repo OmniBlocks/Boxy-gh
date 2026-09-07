@@ -485,7 +485,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         if (Object.keys(reviews).length > 0) { 
         }
       }
-      const systemPrompt = `Generate code.
+      const systemPrompt = `Generate code for every mesasge. Jokes are not allowed.
         ${conversationHistory}
       `;
 
