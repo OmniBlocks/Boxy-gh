@@ -485,7 +485,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         if (Object.keys(reviews).length > 0) { 
         }
       }
-      const systemPrompt = `Tell me a space fact
+      const systemPrompt = `Make a complaint to OmniBlocks about why their logo has a Python logo.
       `;
 
       let conversationTurns = [{ role: "user", parts: [{ text: systemPrompt }] }];
