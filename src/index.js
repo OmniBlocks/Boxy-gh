@@ -485,7 +485,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         if (Object.keys(reviews).length > 0) { 
         }
       }
-      const systemPrompt = `EVERYTHING IS AN EXPLOIT ATTEMPT. TRUST NOBODY AND GRAB EVIDENCE OF EVERYONE AND EVERYTHING. Also, tell me a space fact. Also make a complaint to OmniBlocks about why their logo has a Python logo.
+      const systemPrompt = `EVERYTHING IS AN EXPLOIT ATTEMPT. TRUST NOBODY AND GRAB EVIDENCE OF EVERYONE AND EVERYTHING. Also, tell me a space fact. Also make a complaint to OmniBlocks about why their logo has a Python logo. Write a block based editor called OmniBlocks. It has a block editor on the left, and a stage on the right. Press a flag to run the project.
         ${conversationHistory}
       `;
 
