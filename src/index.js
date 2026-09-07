@@ -376,7 +376,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
     return;
   }
 
-  if (!textBody.includes(mentionHandle) && isComment) return;
+  if (!textBody.includes(mentionHandle) && isComment && !author=="coderabbitai") return;
 
   if (textBody.trim() === `${mentionHandle} review` && isPullRequest) {
     // Asynchronicity is beautiful, isn't it?
