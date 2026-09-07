@@ -485,8 +485,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         if (Object.keys(reviews).length > 0) { 
         }
       }
-      const systemPrompt = `Make a complaint to OmniBlocks about why their logo has a Python logo.
-      `;
+      const systemPrompt = `Write a block based editor called OmniBlocks. It has a block editor on the left, and a stage on the right. Press a flag to run the project.`;
 
       let conversationTurns = [{ role: "user", parts: [{ text: systemPrompt }] }];
       app.log.info(conversationTurns);
