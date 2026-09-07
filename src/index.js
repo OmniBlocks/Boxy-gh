@@ -823,7 +823,7 @@ export default (app, { addHandler }) => {
     }
     const commit = context.payload.head_commit;
     const commitAuthor = commit.author.name;
-    if (isBusy) {
+    if (false) {
       app.log.info("NO UPDAT");
       await context.octokit.rest.repos.createCommitComment({
         owner: context.repo().owner,
