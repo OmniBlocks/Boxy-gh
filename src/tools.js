@@ -5,7 +5,6 @@ import { runCommandInBoxyContainer, sendStdinToBoxyContainer, waitCommandInBoxyC
 import { executeSafely, redactSecrets } from "./safety_filter.js";
 import { buildRunDetailsBlock, insertRunDetailsSection, stripRunDetailsBlock } from "./comment_format.js";
 import { can, describeDenial } from "./permissions.js";
-const { exec } = require('child_process');
 
 
 const readMemoryDeclaration = {
@@ -778,7 +777,7 @@ export async function executeTool(call, context, app, activityLog, authorRole = 
         // Safety filter: blocks high-risk commands and redacts secrets from logs/output.
         toolResult = await executeSafely(
           call.args.command,
-          (command) => exec(command),
+          (command) => runCommandInBoxyContainer(command, isBoxyWebhook, token),
           app.log
         );
       }
