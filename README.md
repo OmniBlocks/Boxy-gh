@@ -2,12 +2,19 @@
 
 > A GitHub App built with [Probot](https://github.com/probot/probot) that our assistant for our omniblocks repo
 
+
+Boxy can respond to comments on issues and PRs, start background tasks to make plans and help on the codebase, and review PRs!
+Boxy is meant to be for people who know what they are doing and are actual developers. It is NOT a slop-generating vibe coding clanker that will make everything for you. It is meant to review PRs made by humans, and help perform tasks to save time, not to replace a human's knowledge.
+
+
+
 ## Setup
 
 install pnpm if you haven't already (it's better than npm trust)
 ```sh
-node runboxy.js # this uses pnpm start under the hood and handles pulling updates and restarting, but it will not restart by itself if the computer restarts or you Ctrl+C the terminal 
+node runboxy.js 
 ```
+this uses pnpm start under the hood and handles pulling updates and restarting, but it will not restart by itself if the computer restarts or you Ctrl+C the terminal 
 
 use pm2 if you want to keep it on forever
 we may provide an npm package in the future to make it easier and you better like it (whether you like it or not)
