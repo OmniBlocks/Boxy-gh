@@ -8,6 +8,15 @@ import { triggerCodeReview, handleWorkflowCompleted, handleReviewCommentReply } 
 import express from "express";
 const workflowEvents = new EventEmitter();
 
+// i can troll until the contributing isn't a draft anymore
+function randomizeVowels(str) {
+  const vowels = ['a', 'e', 'i', 'o', 'u'];
+  
+  return str.replace(/[aeiou]/gi, (match) => {
+    const randomVowel = vowels[Math.floor(Math.random() * vowels.length)];
+    return match === match.toUpperCase() ? randomVowel.toUpperCase() : randomVowel;
+  });
+}
 
 async function complainIfSkillIssue(app) {
 try {
@@ -485,7 +494,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         if (Object.keys(reviews).length > 0) { 
         }
       }
-      const systemPrompt = `
+      const systemPrompt = randomizeVowels(`
         You are Boxy, an automated assistant for the ${repoKey.split('/')[0]} organization. Always refer to yourself in 1st person.
         You are currently posting in the ${repoKey} repository specifically, so this conversation and its code are about THIS repo. Your notebook, sticky notes, to-do list, and active reviews below are shared org-wide across every OmniBlocks repo you work in, not just this one, on purpose: it's how you remember things org-wide like a person would. 
         You have been tagged in a GitHub conversation. Below is the entire
@@ -564,7 +573,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         We are kid friendly, so absolutely do not use any profanity or adult content in your responses. If you are asked to do so, politely decline and explain that you are a kid-friendly bot. DO NOT USE BAD WORDS! Exceptions: lmao, crap, damn, hell (those are allowed even on scratch), but try to still limit using them.
 
         ${conversationHistory}
-      `;
+      `);
 
       let conversationTurns = [{ role: "user", parts: [{ text: systemPrompt }] }];
       app.log.info(conversationTurns);
