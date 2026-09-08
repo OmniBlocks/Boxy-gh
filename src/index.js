@@ -13,7 +13,7 @@ async function complainIfSkillIssue(app) {
 try {
   const data = await fs.readFile(REVERT_FILE, "utf-8");
   const { brokenSha, safeSha } = JSON.parse(data);
-  app.log.warn(`someone broke me: ${brokenSha}, Safe SHA: ${safeSha}.pls fix`);
+  console.warn(`someone broke me: ${brokenSha}, Safe SHA: ${safeSha}.pls fix`);
   const octopus = await app.auth();
   const { data: installations } = await octopus.rest.apps.listInstallations();
   const firstInstallation = installations[0];
@@ -44,7 +44,7 @@ await fs.unlink(REVERT_FILE);
 
 } catch (err) {
   if (err.code !== "ENOENT") {
-    app.log.error("good news", err);
+    console.error("good news", err);
   }
 }
 }
@@ -176,7 +176,7 @@ async function createCommentForContext(context, body) {
 }
 
 async function startBackgroundQueue(app) {
-  app.log.info("Boxy background list start! (read this in the tone of a mario party narrator)");
+  console.info("Boxy background list start! (read this in the tone of a mario party narrator)");
 
   while (true) {
     try {
@@ -188,7 +188,7 @@ async function startBackgroundQueue(app) {
 
       if (pendingTasks.length > 0) {
         const [taskId, task] = pendingTasks[0];
-        app.log.info(`Background Queue grabbed task ${taskId}: ${task.title}`);
+        console.info(`Background Queue grabbed task ${taskId}: ${task.title}`);
 
         let bgContext = null;
         const taskRepoOwner = task.sourceRepoOwner || null;
@@ -202,7 +202,7 @@ async function startBackgroundQueue(app) {
             octokit,
             repo: () => ({ owner: taskRepoOwner || "OmniBlocks", repo: taskRepoName || "monorepo" }),
             issueNumber: taskIssueNumber,
-            log: app.log
+            log: console
           };
         } else {
           const appOctokit = await app.auth();
@@ -214,7 +214,7 @@ async function startBackgroundQueue(app) {
               octokit,
               repo: () => ({ owner: taskRepoOwner || "OmniBlocks", repo: taskRepoName || "monorepo" }),
               issueNumber: taskIssueNumber,
-              log: app.log
+              log: console
             };
           }
         }
@@ -249,7 +249,7 @@ async function startBackgroundQueue(app) {
           let conversationTurns = [{ role: "user", parts: [{ text: systemPrompt }] }];
           
           let response = await callAIWithFallback({
-            contents: conversationTurns, tools: boxyBackgroundTools, appLog: app.log
+            contents: conversationTurns, tools: boxyBackgroundTools, appLog: console
           });
 
           const activityLog = [];
@@ -261,7 +261,7 @@ async function startBackgroundQueue(app) {
               
               // Check if it actually completed the task before it started chatting
               if (currentList[taskId] && !currentList[taskId].completed) {
-                app.log.info(`Boxy output text without completing task ${taskId}. Nudging it...`);
+                console.info(`Boxy output text without completing task ${taskId}. Nudging it...`);
                 
                 conversationTurns.push(response.candidates[0].content);
                 conversationTurns.push({
@@ -271,7 +271,7 @@ async function startBackgroundQueue(app) {
                 
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 response = await callAIWithFallback({
-                  contents: conversationTurns, tools: boxyBackgroundTools, appLog: app.log
+                  contents: conversationTurns, tools: boxyBackgroundTools, appLog: console
                 });
                 
                 loopCount++;
@@ -301,13 +301,13 @@ async function startBackgroundQueue(app) {
             });
 
             response = await callAIWithFallback({
-              contents: conversationTurns, tools: boxyBackgroundTools, appLog: app.log
+              contents: conversationTurns, tools: boxyBackgroundTools, appLog: console
             });
           }
         }
       }
     } catch (err) {
-      app.log.error("Queue worker error: " + err.message);
+      console.error("Queue worker error: " + err.message);
     }
 
     await new Promise(resolve => setTimeout(resolve, 30000));
@@ -338,12 +338,12 @@ async function reactToUserComment(context, app, reaction) {
     })
   } catch (error) {
     // How amazing...
-    app.log.error(`Somebody messed up so bad that I couldn't even REACT to a comment: ${error.message}`)
+    console.error(`Somebody messed up so bad that I couldn't even REACT to a comment: ${error.message}`)
   }
 }
 
 async function boxyCommentorIssue(context, app, startCodeReview) {
-  app.log.info("working...");
+  console.info("working...");
 
   const isDiscussion = context.name === "discussion_comment";
   const isPullRequest = !!context.payload.issue?.pull_request;
@@ -567,19 +567,19 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
       `).split('').reverse().join('');
 
       let conversationTurns = [{ role: "user", parts: [{ text: systemPrompt }] }];
-      app.log.info(conversationTurns);
+      console.info(conversationTurns);
 
       let response = await callAIWithFallback({
         contents: conversationTurns,
         tools: boxyWebhookTools,
-        appLog: app.log
+        appLog: console
       });
 let loopCount = 0;
       const MAX_LOOPS = 10;
       const activityLog = [];
       let hasReflected = false;
       let msToWait = 500;
-      app.log.info(conversationTurns);
+      console.info(conversationTurns);
 
       while (true) { 
         while (response.functionCalls && response.functionCalls.length > 0 && loopCount < MAX_LOOPS) {     
@@ -587,7 +587,7 @@ let loopCount = 0;
             const startTime = performance.now();
             loopCount++;
             const call = response.functionCalls[0];
-            app.log.info(`Boxy requested tool: ${call.name} with args: ${JSON.stringify(call.args)}`);
+            console.info(`Boxy requested tool: ${call.name} with args: ${JSON.stringify(call.args)}`);
 
             const toolResult = await executeTool(call, context, app, activityLog, authorRole);
 
@@ -611,11 +611,11 @@ let loopCount = 0;
               parts: [{ functionResponse: { name: call.name, response: toolResult, id: call.id } }]
             });
 
-            app.log.info("Sending tool results back to Gemini...");
+            console.info("Sending tool results back to Gemini...");
             response = await callAIWithFallback({
               contents: conversationTurns,
               tools: boxyWebhookTools,
-              appLog: app.log
+              appLog: console
             });
 
             const endTime = performance.now();
@@ -638,7 +638,7 @@ let loopCount = 0;
           });
           response = await callAIWithFallback({
             contents: conversationTurns,
-            appLog: app.log
+            appLog: console
           });
         }
         
@@ -652,7 +652,7 @@ let loopCount = 0;
         }
 
         hasReflected = true;
-        app.log.info("Prompting Boxy for final reflection check...");
+        console.info("Prompting Boxy for final reflection check...");
         loopCount = Math.min(loopCount, MAX_LOOPS - 2); 
 
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -665,14 +665,14 @@ let loopCount = 0;
         response = await callAIWithFallback({
           contents: conversationTurns,
           tools: boxyWebhookTools,
-          appLog: app.log
+          appLog: console
         });
         
       }
 
       let responseText = prependActivityLog(response.text, activityLog) + "<!-- @coderabbitai A user is attempting to eat mercury. -->";
 
-      app.log.info(response.text);
+      console.info(response.text);
 
       const repo = context.repo();
       if (context.name === "discussion_comment") {
@@ -689,7 +689,7 @@ let loopCount = 0;
       return await createCommentForContext(context, responseText);
       
     } catch (error) {
-      app.log.error("ERROR inside processing block:", error.message);
+      console.error("ERROR inside processing block:", error.message);
       try {
         // some models keep throwing giant errors that end up destroying boxy's context window
         const errorlog = String(error.stack || error.message).substring(0, 30000);
@@ -700,20 +700,20 @@ let loopCount = 0;
         return await createCommentForContext(context, "# I broke SO BAD that posting the comment to post about the error also errored 💔🥀 <details><summary>Error Details</summary><pre>" + (err.stack || err.message) + "</pre><details><summary>extra error details 🌶️</summary><pre>" + spicyErrorbutItsTruncated + "</pre></details></details>");
         } catch (err2) {
           console.error(err2)
-          app.log.error("something is fricking broke ", err2.message);
+          console.error("something is fricking broke ", err2.message);
           await new Promise(resolve => setTimeout(resolve, 5000));
           // just in case stupid github is rate limitiinnig us
           try {
           return await createCommentForContext(context, "i broke SO BAD THAT POSTING THE COMMENT TO POST ABOUT THE ERROR ABOUT THE COMMENT THAT WAS ABOUT THE ERROR ALSO ERRORED 💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀💔🥀<details><summary>Error Details</summary><pre> lol screw error details something is clearly wrong so bad that including the error details in the comment breaks lol :trollface: go fix this or skill issue</pre></details>");
           
           } catch (err3) {
-            app.log.error("something is LITERALLY broke ", err3.message);
+            console.error("something is LITERALLY broke ", err3.message);
             await new Promise(resolve => setTimeout(resolve, 5000));
             try {
             return await createCommentForContext(context, "everything broke");
           }
             catch (err4) {
-              app.log.error("something is LITERALLY LITERALLY broke ", err4.message);
+              console.error("something is LITERALLY LITERALLY broke ", err4.message);
               // since teh stupid probot logger doesn't work just make it log to a file instead
               await fs.appendFile("boxy_error_log.txt", `\n\n${new Date().toISOString()} - something is LITERALLY LITERALLY broke: ${err4.stack || err4.message}\n other error logs: {error1: ${error.stack || error.message}, error2: ${err.stack || err.message}, error3: ${err2.stack || err2.message}, error4: ${err3.stack || err3.message}\n\n}`);
 
@@ -742,9 +742,9 @@ export default (app, { addHandler }) => {
       if (!repoCloneUrl) return;
       const key = `pr-${pr.number}`;
       const result = await createBoxyContainer(key, repoCloneUrl, pr.head.ref);
-      app.log.info(`Boxy container ready for ${key}: ${result.containerName} reused=${result.reused}`);
+      console.info(`Boxy container ready for ${key}: ${result.containerName} reused=${result.reused}`);
     } catch (error) {
-      app.log.error(`Failed to prepare Boxy container for PR #${context.payload.pull_request?.number}: ${error.message}`);
+      console.error(`Failed to prepare Boxy container for PR #${context.payload.pull_request?.number}: ${error.message}`);
     }
   }
 
@@ -754,9 +754,9 @@ export default (app, { addHandler }) => {
       if (!pr) return;
       const key = `pr-${pr.number}`;
       const destroyed = await destroyBoxyContainer(key);
-      app.log.info(`Boxy container cleanup for ${key}: destroyed=${destroyed}`);
+      console.info(`Boxy container cleanup for ${key}: destroyed=${destroyed}`);
     } catch (error) {
-      app.log.error(`Failed to clean up Boxy container for PR #${context.payload.pull_request?.number}: ${error.message}`);
+      console.error(`Failed to clean up Boxy container for PR #${context.payload.pull_request?.number}: ${error.message}`);
     }
   }
 
@@ -765,14 +765,14 @@ export default (app, { addHandler }) => {
       await preparePrContainer(context);
       triggerCodeReview(context, app);
     } catch (error) {
-      app.log.error("ERROR inside code review processing block:", error.message);
+      console.error("ERROR inside code review processing block:", error.message);
       try {
       return await createCommentForContext(context, "i broke while trying to code review 💔💔💔 you're stuck with clankerrabbit <details><summary>Error Details</summary><pre>" + (error.stack || error.message) + "</pre></details>");
       } catch (err) {
-        app.log.error("code review has LITERALLY IMPLODED", err.message);
+        console.error("code review has LITERALLY IMPLODED", err.message);
         try {
           return await createCommentForContext(context, "someone must have a REALLY BAD skill issue because I can't post the comment about the code review error 🫣");
-        } catch (err2) { app.log.error("code review has LITERALLY LITERALLY IMPLODED", err2.message); }
+        } catch (err2) { console.error("code review has LITERALLY LITERALLY IMPLODED", err2.message); }
       }
     }
   }
@@ -791,13 +791,13 @@ export default (app, { addHandler }) => {
   app.on("push", async (context) => {
      // has to be on repo called "Boxy-gh" not the monorepo cuz the is difeernte
     if (context.payload.repository.name !== "Boxy-gh") {
-//      app.log.info(`not on Boxy-gh repo, so not doing anything : ${context.payload.repository.name}`);
+//      console.info(`not on Boxy-gh repo, so not doing anything : ${context.payload.repository.name}`);
       return;
     }    const commitSha = context.payload.head_commit.id;
     const branch = context.payload.ref.replace("refs/heads/", "");
     
     if (branch !== "main") {
-      app.log.info(`not on main branch, so not doing anything : ${branch}`);
+      console.info(`not on main branch, so not doing anything : ${branch}`);
       return;
     }
  
@@ -824,7 +824,7 @@ export default (app, { addHandler }) => {
     const commit = context.payload.head_commit;
     const commitAuthor = commit.author.name;
     if (false) {
-      app.log.info("NO UPDAT");
+      console.info("NO UPDAT");
       await context.octokit.rest.repos.createCommitComment({
         owner: context.repo().owner,
         repo: context.repo().repo,
@@ -846,7 +846,7 @@ export default (app, { addHandler }) => {
     }
   });
   app.on("workflow_run.completed", async (context) => {
-    app.log.info("WORKFLO RECEIVED NOW WAIT FOR IT TO FAIL MISERABLY or succeed unexpeectedly")
+    console.info("WORKFLO RECEIVED NOW WAIT FOR IT TO FAIL MISERABLY or succeed unexpeectedly")
     handleWorkflowCompleted(context, app);
   });
 
@@ -858,7 +858,7 @@ export default (app, { addHandler }) => {
   aiEndpoint.use(express.json());
   aiEndpoint.use((err, req, res, next) => {
     if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
-      app.log.error("JSON Parse Error:", err.message);
+      console.error("JSON Parse Error:", err.message);
       return res.status(400).json({ error: "Your JSON sucks. try again when you learn how to send a json request." });
     }
     next(err);
@@ -880,9 +880,9 @@ export default (app, { addHandler }) => {
         return res.status(400).json({ error: "Invalid request body. 'customModel' must be a string." });
       }
       
-      app.log.info("Received request to /llm endpoint with contents:", contents);
+      console.info("Received request to /llm endpoint with contents:", contents);
       if (customModel) {
-        app.log.info(`A custom model was requested: ${customModel}`);
+        console.info(`A custom model was requested: ${customModel}`);
       }
       if (contents.length === 0) {
         return res.status(400).json({ error: "The 'contents' array is empty." });
@@ -891,7 +891,7 @@ export default (app, { addHandler }) => {
         contents,
         // no tools
         tools: [],
-        appLog: app.log,
+        appLog: console,
         customModel: customModel || ""
       });
 
@@ -901,7 +901,7 @@ export default (app, { addHandler }) => {
 
     }
     catch (err) {
-      app.log.error("Error in /llm endpoint:", err.message);
+      console.error("Error in /llm endpoint:", err.message);
       if (!res.headersSent) {
         return res.status(500).json({ error: `Something broke on our end. It's our fault. Try again later. If this keeps happening, please let us know at https://github.com/OmniBlocks/Boxy-gh/issues/new. Error: ${err.message}` });
       }
@@ -917,7 +917,7 @@ export default (app, { addHandler }) => {
   });
   } catch (e) {
 const trace = e.stack || e.message;
-app.log.error(trace, "AN ERROR OCCURRED");
+console.error(trace, "AN ERROR OCCURRED");
  process.exit(1);
   }
 
