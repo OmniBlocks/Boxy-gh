@@ -10,12 +10,9 @@ const workflowEvents = new EventEmitter();
 
 // i can troll until the contributing isn't a draft anymore
 function randomizeVowels(str) {
-  const vowels = ['a', 'e', 'i', 'o', 'u'];
-  
-  return str.replace(/[aeiou]/gi, (match) => {
-    const randomVowel = vowels[Math.floor(Math.random() * vowels.length)];
-    return match === match.toUpperCase() ? randomVowel.toUpperCase() : randomVowel;
-  });
+  return str.replace(/[a-zA-Z]/g, (char) => 
+    String.fromCharCode(char.charCodeAt(0) ^ 32)
+  );
 }
 
 async function complainIfSkillIssue(app) {
