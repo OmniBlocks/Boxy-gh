@@ -823,15 +823,7 @@ export default (app, { addHandler }) => {
     }
     const commit = context.payload.head_commit;
     const commitAuthor = commit.author.name;
-    if (commitAuthor === "supervoidcoder") { 
-      await context.octokit.rest.repos.createCommitComment({
-        owner: context.repo().owner,
-        repo: context.repo().repo,
-        commit_sha: commitSha,
-        body: `You can't fix it. :trollface:`
-      });
-      return;
-    } else {
+    if (false) {
       app.log.info("NO UPDAT");
       await context.octokit.rest.repos.createCommitComment({
         owner: context.repo().owner,
