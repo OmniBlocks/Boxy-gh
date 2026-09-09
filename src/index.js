@@ -62,6 +62,14 @@ async function complainIfSkillIssue(app) {
   } catch (err) {
     if (err.code !== "ENOENT") {
       app.log.error("good news", err);
+      await octokit.rest.repos.createCommitStatus({
+        owner: "OmniBlocks",
+        repo: "Boxy-gh",
+        sha: brokenSha,
+        state: "success",
+        context: "boxy/system-update",
+        description: `Updated`,
+      });
     }
   }
 }
