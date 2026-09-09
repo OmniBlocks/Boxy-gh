@@ -1217,7 +1217,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
           "Authorization": `Bearer ${process.env.OLLAMA_API_KEY}`
         };
 
-        const res = await fetch("https://api.ollama.com/v1/chat/completions", {
+        const res = await fetch("https://ollama.com/v1/chat/completions", {
           method: "POST",
           headers,
           body: JSON.stringify(body)
