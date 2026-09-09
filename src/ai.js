@@ -176,9 +176,10 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
   // needs big brain is optional param for when stronk models for thinking reviews or smth
 
   const providers = [    
+    { name: "ollama-gemma4-31b", type: "ollama", model: "gemma4:31b" },
     { name: "gemini-3.5-flash-lite", type: "google", model: "gemini-3.5-flash-lite", useBackup: false },
     { name: "gemini-3.1-flash-lite", type: "google", model: "gemini-3.1-flash-lite", useBackup: false },
-    { name: "ollama-gemma4-31b", type: "ollama", model: "gemma4:31b" },
+    
     { name: "novita-macaron-v1-tall", type: "novita", model: "mindai/macaron-v1-tall" },
     { name: "ollama-gpt-oss-120b", type: "ollama", model: "gpt-oss:120b" },
     { name: "ollama-gpt-oss-20b", type: "ollama", model: "gpt-oss:20b" },
@@ -1193,7 +1194,7 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
             }
           ],
           text: formattedText
-        };
+        }; 
       } 
       if (provider.type === "ollama") {
         if (!process.env.OLLAMA_API_KEY) {
