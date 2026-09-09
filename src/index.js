@@ -20,6 +20,7 @@ async function complainIfSkillIssue(app) {
 
     
 
+    
     if (firstInstallation) {
       const octokit = await app.auth(firstInstallation.id);
       
