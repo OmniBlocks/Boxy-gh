@@ -10,45 +10,60 @@ const workflowEvents = new EventEmitter();
 
 
 async function complainIfSkillIssue(app) {
-try {
-  const data = await fs.readFile(REVERT_FILE, "utf-8");
-  const { brokenSha, safeSha } = JSON.parse(data);
-  app.log.warn(`someone broke me: ${brokenSha}, Safe SHA: ${safeSha}.pls fix`);
-  const octopus = await app.auth();
-  const { data: installations } = await octopus.rest.apps.listInstallations();
-  const firstInstallation = installations[0];
+  try {
+    const data = await fs.readFile(REVERT_FILE, "utf-8");
+    const { brokenSha, safeSha } = JSON.parse(data);
+    app.log.warn(`someone broke me: ${brokenSha}, Safe SHA: ${safeSha}.pls fix`);
+    const octopus = await app.auth();
+    const { data: installations } = await octopus.rest.apps.listInstallations();
+    const firstInstallation = installations[0];
 
+    if (firstInstallation) {
+      const octokit = await app.auth(firstInstallation.id);
+      
+      const commit = await octokit.rest.repos.getCommit({
+        owner: "OmniBlocks",
+        repo: "Boxy-gh",
+        ref: brokenSha
+      });
+      
+      const commitAuthor = commit.data.author?.login;
+      
+      // Set commit status to 'failure'
+      await octokit.rest.repos.createCommitStatus({
+        owner: "OmniBlocks",
+        repo: "Boxy-gh",
+        sha: brokenSha,
+        state: "failure",
+        context: "boxy/system-update",
+        description: `Reverted to ${safeSha.slice(0, 7)} because you have a skill issue.`,
+      });
 
-  
+      await octokit.rest.repos.createCommitComment({
+        owner: "OmniBlocks",
+        repo: "Boxy-gh",
+        commit_sha: brokenSha,
+        body: `@${commitAuthor} Your code on commit ${brokenSha} is broken. I've gone back to commit ${safeSha} so that I didn't die because of your skill issue. Please push a new commit to fix it!`
+      });
+    } else {
+      await octokit.rest.repos.createCommitStatus({
+        owner: "OmniBlocks",
+        repo: "Boxy-gh",
+        sha: brokenSha,
+        state: "success",
+        context: "boxy/system-update",
+        description: `Updated`,
+      });
+    }
+    
+    await fs.unlink(REVERT_FILE);
 
-  
-
-
-  if (firstInstallation) {
-    const octokit = await app.auth(firstInstallation.id);
-     const commit = await octokit.rest.repos.getCommit({
-    owner: "OmniBlocks",
-    repo: "Boxy-gh",
-    ref: brokenSha
-  });
-  const commitAuthor = commit.data.author?.login;
-    await octokit.rest.repos.createCommitComment({
-      owner: "OmniBlocks",
-      repo: "Boxy-gh",
-      commit_sha: brokenSha,
-      body: `@${commitAuthor} Your code on commit ${brokenSha} is broken. I've gone back to commit ${safeSha} so that I didn't die because of your skill issue. Please push a new commit to fix it!`
-    });
-  }
-  
-await fs.unlink(REVERT_FILE);
-
-} catch (err) {
-  if (err.code !== "ENOENT") {
-    app.log.error("good news", err);
+  } catch (err) {
+    if (err.code !== "ENOENT") {
+      app.log.error("good news", err);
+    }
   }
 }
-}
-
 export async function labelIssue(context, label) {
   try {
     await context.octokit.rest.issues.addLabels({
@@ -834,13 +849,14 @@ export default (app, { addHandler }) => {
       });
       return;
     } else { 
-      await context.octokit.rest.repos.createCommitComment({
+      await context.octokit.rest.repos.createCommitStatus({
         owner: context.repo().owner,
         repo: context.repo().repo,
-        commit_sha: commitSha,
-        body: `@${commitAuthor} I have acknowledged your commit. Assuming this doesn't break me, I'll restart myself with the new changes. If it does, then skill issue.`
-      }); 
-      
+        sha: commitSha, // or context.payload.head_commit.id
+        state: "pending", // Options: "error", "failure", "pending", "success"
+        description: "Boxy is updating...", // Brief status message
+        context: "boxy/system-update" // Unique identifier/name for this status check
+      });
       setTimeout(() => {
          process.exit(0); 
       }, 2000);
