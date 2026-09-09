@@ -17,6 +17,7 @@ async function complainIfSkillIssue(app) {
     const octopus = await app.auth();
     const { data: installations } = await octopus.rest.apps.listInstallations();
     const firstInstallation = installations[0];
+
     
 
     if (firstInstallation) {
