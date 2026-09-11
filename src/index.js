@@ -62,7 +62,7 @@ async function complainIfSkillIssue(app) {
     await fs.unlink(REVERT_FILE);
 
   } catch (err) {
-    if (err.code !== "ENOENT") {
+    
       app.log.error("good news", err);
       await octokit.rest.repos.createCommitStatus({
         owner: "OmniBlocks",
@@ -72,7 +72,7 @@ async function complainIfSkillIssue(app) {
         context: "boxy/system-update",
         description: `Updated`,
       });
-    }
+    
   }
 }
 export async function labelIssue(context, label) {
