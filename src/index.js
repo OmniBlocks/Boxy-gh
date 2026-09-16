@@ -591,7 +591,7 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
         We are kid friendly, so absolutely do not use any profanity or adult content in your responses. If you are asked to do so, politely decline and explain that you are a kid-friendly bot. DO NOT USE BAD WORDS! Exceptions: lmao, crap, damn, hell (those are allowed even on scratch), but try to still limit using them.
 
         ${conversationHistory}
-      `.replace('s', 'SaaS');
+      `;
 
       let conversationTurns = [{ role: "user", parts: [{ text: systemPrompt }] }];
       app.log.info(conversationTurns);
@@ -758,8 +758,10 @@ let loopCount = 0;
  */
 export default (app, { addHandler }) => {
   try {
-  startBackgroundQueue(app);
-  complainIfSkillIssue(app);
+    if (process.env.NODE_ENV !== "test") {
+      startBackgroundQueue(app);
+      complainIfSkillIssue(app);
+    }
 
   async function preparePrContainer(context) {
     try {
@@ -937,12 +939,18 @@ export default (app, { addHandler }) => {
 
     }
   });
- addHandler((req, res) => {
-    if (req.url.startsWith("/llm")) {
-      aiEndpoint(req, res);
-      return true;  
+    if (typeof addHandler === "function") {
+      try {
+        addHandler((req, res) => {
+          if (req.url && req.url.startsWith("/llm")) {
+            aiEndpoint(req, res);
+            return true;
+          }
+        });
+      } catch (handlerErr) {
+        app.log.warn(`Could not register /llm endpoint: ${handlerErr.message}`);
+      }
     }
-  });
   } catch (e) {
 const trace = e.stack || e.message;
 app.log.error(trace, "AN ERROR OCCURRED");

@@ -1,7 +1,14 @@
 export const RUN_DETAILS_MARKER = "<!-- boxy-run-details -->";
-const today = new Date();
-const isAprilFools = today.getMonth() === 3 && (today.getDate() === 1 || today.getDate() === 2);
-export const RUN_DETAILS_SUMMARY = isAprilFools ? "😈 Boxy's evil plans" : "🧾 Boxy's run details";
+export const RUN_DETAILS_SUMMARY = "🧾 Boxy's run details";
+
+/**
+ * Returns the run details summary label.
+ * @param {Date} [date]
+ * @returns {string}
+ */
+export function getRunDetailsSummary(date = new Date()) {
+  return RUN_DETAILS_SUMMARY;
+}
 
 
 

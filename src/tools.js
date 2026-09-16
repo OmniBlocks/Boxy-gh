@@ -808,11 +808,13 @@ export async function executeTool(call, context, app, activityLog, authorRole = 
     }
     else if (call.name === "web_fetch") {
       app.log.info(`Boxy is fetching: ${call.args.url}`);
-      const fetchResult = await fetch(call.args.query);
+      const targetUrl = call.args.url || call.args.query;
+      const fetchResult = await fetch(targetUrl);
+      const text = typeof fetchResult.text === "function" ? await fetchResult.text() : "";
       toolResult = {
         success: fetchResult.ok,
-        text: fetchResult.text || ''
-      }
+        text
+      };
     }
     else if (call.name === "create_pull_request") {
       const { title, head, body, draft } = call.args;
