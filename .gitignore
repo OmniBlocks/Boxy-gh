@@ -14,3 +14,4 @@ boxy_todo_list.json
 boxy_revert_pending.json
 boxy_containers.json
 boxy_error_log.txt
+.aider*
