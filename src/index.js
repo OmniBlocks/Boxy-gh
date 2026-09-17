@@ -5,12 +5,18 @@ import { loadNotebook, loadTodoList, loadReviews, loadStickyNotes, REVERT_FILE }
 import { callAIWithFallback } from "./ai.js";
 import { executeTool, boxyWebhookTools, boxyBackgroundTools, prependActivityLog, stripRunDetails } from "./tools.js"; 
 import { triggerCodeReview, handleWorkflowCompleted, handleReviewCommentReply } from './review.js';
+import { handlePreemptivePrClose } from "./whitelist.js";
 import express from "express";
 const workflowEvents = new EventEmitter();
 
 
 async function complainIfSkillIssue(app) {
   try {
+    try {
+      await fs.access(REVERT_FILE);
+    } catch {
+      return;
+    }
     const data = await fs.readFile(REVERT_FILE, "utf-8");
     const { brokenSha, safeSha } = JSON.parse(data);
     app.log.warn(`someone broke me: ${brokenSha}, Safe SHA: ${safeSha}.pls fix`);
@@ -62,8 +68,8 @@ async function complainIfSkillIssue(app) {
     await fs.unlink(REVERT_FILE);
 
   } catch (err) {
-    
-      app.log.error("good news", err);
+    app.log.error("good news", err);
+    if (typeof octokit !== "undefined" && typeof brokenSha !== "undefined") {
       await octokit.rest.repos.createCommitStatus({
         owner: "OmniBlocks",
         repo: "Boxy-gh",
@@ -72,7 +78,7 @@ async function complainIfSkillIssue(app) {
         context: "boxy/system-update",
         description: `Updated`,
       });
-    
+    }
   }
 }
 export async function labelIssue(context, label) {
@@ -94,10 +100,14 @@ export async function labelIssue(context, label) {
 export async function issueCloseOrOpen(context, state, state_reason = null) {
   try {
     const { owner, repo } = context.repo();
+    const issueNumber = context.payload.issue?.number || context.payload.pull_request?.number;
+    if (!issueNumber) {
+      return { error: "No issue or pull request number found in context payload." };
+    }
     const updateParams = {
       owner,
       repo,
-      issue_number: context.payload.issue.number,
+      issue_number: issueNumber,
       state: state,  
     };
  
@@ -106,7 +116,7 @@ export async function issueCloseOrOpen(context, state, state_reason = null) {
     }
 
     await context.octokit.rest.issues.update(updateParams);
-    return { status: "success", message: `Issue state updated to ${state} (${state_reason || 'no reason provided'}).` };
+    return { status: "success", message: `Issue/PR state updated to ${state} (${state_reason || 'no reason provided'}).` };
   } catch (error) {
     context.log.error(`Failed to update issue state:`, error);
     return { error: `Failed to update issue state: ${error.message}` };
@@ -789,6 +799,25 @@ export default (app, { addHandler }) => {
 
   async function startCodeReview(context, app) {
     try {
+      let pr = context.payload.pull_request;
+      if (!pr && context.payload.issue?.pull_request) {
+        const { owner, repo } = context.repo();
+        const prRes = await context.octokit.rest.pulls.get({
+          owner,
+          repo,
+          pull_number: context.payload.issue.number
+        });
+        pr = prRes?.data;
+      }
+
+      if (pr) {
+        const closeResult = await handlePreemptivePrClose(context, app, pr);
+        if (closeResult && closeResult.closed) {
+          app.log.info(`Pre-emptively closed PR #${pr.number} for @${pr.user?.login}; pinged @OmniBlocks/coders.`);
+          return;
+        }
+      }
+
       await preparePrContainer(context);
       triggerCodeReview(context, app);
     } catch (error) {
@@ -805,8 +834,7 @@ export default (app, { addHandler }) => {
   }
 
   app.on(["issue_comment.created", "discussion_comment.created", "issues.opened"], async (context) => {
-    boxyCommentorIssue(context, app, startCodeReview);
-    return;
+    return await boxyCommentorIssue(context, app, startCodeReview);
   });
 
   app.on(["pull_request.opened", "pull_request.synchronize", "pull_request.reopened"], async (context) => await startCodeReview(context, app));
@@ -937,12 +965,18 @@ export default (app, { addHandler }) => {
 
     }
   });
- addHandler((req, res) => {
-    if (req.url.startsWith("/llm")) {
-      aiEndpoint(req, res);
-      return true;  
+  try {
+    if (addHandler) {
+      addHandler((req, res) => {
+        if (req.url.startsWith("/llm")) {
+          aiEndpoint(req, res);
+          return true;  
+        }
+      });
     }
-  });
+  } catch (err) {
+    app.log.warn(`HTTP handler not registered: ${err.message}`);
+  }
   } catch (e) {
 const trace = e.stack || e.message;
 app.log.error(trace, "AN ERROR OCCURRED");

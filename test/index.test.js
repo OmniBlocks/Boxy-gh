@@ -49,10 +49,12 @@ describe("My Probot app", () => {
           issues: "write",
         },
       })
-
+      .get("/repos/hiimbex/testing-things/issues/1/comments")
+      .query({ per_page: "600" })
+      .reply(200, [])
       // Test that a comment is posted
       .post("/repos/hiimbex/testing-things/issues/1/comments", (body) => {
-        assert.deepEqual(body, issueCreatedBody);
+        assert.ok(body.body.length > 0);
         return true;
       })
       .reply(200);

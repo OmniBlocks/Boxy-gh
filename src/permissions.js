@@ -64,3 +64,6 @@ export function describeDenial(capability, authorRole, env = process.env) {
     + `Don't retry this, and don't pretend you did it anyway. Tell them plainly that this specific action needs `
     + `${audience} to ask for it, and offer whatever you CAN still do for them.`;
 }
+
+export { getWhitelist, isWhitelisted, isOrgMember, checkPrAuthorAccess, handlePreemptivePrClose } from "./whitelist.js";
+

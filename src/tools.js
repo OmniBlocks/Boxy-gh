@@ -5,6 +5,7 @@ import { runCommandInBoxyContainer, sendStdinToBoxyContainer, waitCommandInBoxyC
 import { executeSafely, redactSecrets } from "./safety_filter.js";
 import { buildRunDetailsBlock, insertRunDetailsSection, stripRunDetailsBlock } from "./comment_format.js";
 import { can, describeDenial } from "./permissions.js";
+import { analyzeHumorInDiff } from "./humor.js";
 
 
 const readMemoryDeclaration = {
@@ -763,8 +764,30 @@ export async function executeTool(call, context, app, activityLog, authorRole = 
         }
       }
 
-       
-      toolResult = { diff: formattedLines.join("\n").substring(0, 50000) };
+      const rawDiff = formattedLines.join("\n");
+      const humorAnalysis = analyzeHumorInDiff(rawDiff);
+
+      try {
+        const reviews = await loadReviews();
+        const prKey = call.args.pull_number.toString();
+        if (reviews[prKey]) {
+          reviews[prKey].humorAnalysis = humorAnalysis;
+          await saveReviews(reviews);
+        }
+      } catch {
+      }
+
+      toolResult = {
+        diff: rawDiff.substring(0, 50000),
+        humor_evaluation: {
+          removes_humor: humorAnalysis.removesHumor,
+          adds_humor: humorAnalysis.addsHumor,
+          recommendation: humorAnalysis.recommendation,
+          details: humorAnalysis.reason,
+          removed_humor_count: humorAnalysis.removedHumorCount,
+          added_humor_count: humorAnalysis.addedHumorCount
+        }
+      };
     }
     else if (call.name === "execute_command") {
       // pass whether it's a webhook triggered by issues comment added, issue opened, or code review comment
@@ -925,12 +948,20 @@ export async function executeTool(call, context, app, activityLog, authorRole = 
       const prKey = call.args.pull_number.toString();
       const draftComments = (reviews[prKey] && reviews[prKey].draft_comments) ? reviews[prKey].draft_comments : [];
 
+      let reviewEvent = call.args.event;
+      let reviewBody = call.args.body;
+
+      if (reviews[prKey]?.humorAnalysis?.removesHumor && reviewEvent === "APPROVE") {
+        reviewEvent = "REQUEST_CHANGES";
+        reviewBody = `> [!WARNING]\n> **Humor Policy Rejection**: This PR attempts to remove humor from the codebase. In accordance with OmniBlocks policy, removing humor is unacceptable and cannot be approved.\n\n${reviewBody}`;
+      }
+
       await context.octokit.rest.pulls.createReview({
         owner,
         repo,
         pull_number: call.args.pull_number,
-        event: call.args.event,
-        body: call.args.body,
+        event: reviewEvent,
+        body: reviewBody,
         comments: draftComments
       });
 

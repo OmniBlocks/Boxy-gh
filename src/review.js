@@ -2,6 +2,7 @@ import AdmZip from 'adm-zip';
 import { callAIWithFallback } from './ai.js';
 import { loadReviews, saveReviews, loadNotebook, loadTodoList, loadStickyNotes } from './fs.js';
 import { boxyReviewTools, executeTool, boxyWebhookTools, prependActivityLog, stripRunDetails } from './tools.js';
+import { handlePreemptivePrClose } from './whitelist.js';
 
 export async function triggerCodeReview(context, app) {
   let pr;
@@ -25,8 +26,15 @@ export async function triggerCodeReview(context, app) {
     throw error; // Just throw it anyway for debugging purposes. :P
   }
 
+  if (!pr) return;
   const author = pr.user.login;
   if (pr.user.type === "Bot" || author.includes("[bot]")) return;
+
+  const closeResult = await handlePreemptivePrClose(context, app, pr);
+  if (closeResult && closeResult.closed) {
+    app.log.info(`Pre-emptively closed PR #${pr.number} for @${author} in triggerCodeReview.`);
+    return;
+  }
 
   const comments = await context.octokit.paginate(context.octokit.rest.issues.listComments, {
     owner: context.repo().owner, repo: context.repo().repo, issue_number: pr.number, per_page: 100
@@ -210,6 +218,11 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
     5. Write down a detailed audit of the PR in a notebook entry. In the title, write "PR #${prNum} Repo: ${reviewRepoKey} Branch: ${prBranch}". In the content, write everything about the PR along with everything you found and everything you may need to remember in a future review of this PR. If you see a notebook entry listed above that already has this title, please READ IT FIRST so that you can be caught up on your old review, and update it by simply using save_memory again with the updated content and the EXACT same title. Remember, NOBODY can see your notebook entries except YOU, and they are meant for YOU to see, unlike inline comments, pr summary, or finish review. They're so incremental reviews don't become awkward with you acting as if it's a PR you've never seen before. When you write down an entry, write down the commit sha INSIDE THE CONTENT (not the title) of the entry. This is so you can compare it to a new commit if you had reviewed a previous commit.
 
     6. Finally, use 'finish_pr_review' with APPROVE, REQUEST_CHANGES, or COMMENT to submit your final decision. When you do this, include a shorter summary of your findings with the main things that need to be changed, since you already gave the detailed summary with 'update_pr_summary'. With this tool, instead of summarizing what the PR does or changes, this is your time to give what actually needs to change among other things. Basically, just don't repeat what you already said in the main summary. Also ping the pr author with a @mention. 
+
+    7. Mandatory Humor Policy:
+       OmniBlocks strictly requires and celebrates humor, jokes, and lightheartedness.
+       - You MUST REJECT pull requests that attempt to remove humor: If the PR removes jokes, funny variable names, playful comments, humorous strings, banter, or easter eggs from the codebase, you MUST REJECT the PR by using 'finish_pr_review' with event 'REQUEST_CHANGES' (or close it with 'close_or_open_issue'). Clearly explain that removing humor is strictly against OmniBlocks culture and values.
+       - You MUST ACCEPT pull requests that try to add humor: If the PR adds good humor, jokes, playful remarks, humorous documentation, or witty easter eggs (while keeping code functional), you MUST ACCEPT/APPROVE the PR by using 'finish_pr_review' with event 'APPROVE'!
 
     Be strict in the technical sense, but don't write like a grumpy old man. Write in a friendly, casual, and even playful tone! No profanity or offensive language, as OmniBlocks is targeted for all ages, including (but not limited to) kids. So don't use bad words in your own comments, and flag offensive content in the PR as well in the form of inline comments.
     You can include nitpicks if you want in a details tag. Use emojis for each details tag, but don't use them in actual text unless it is a quote.
