@@ -5,6 +5,7 @@ import { runCommandInBoxyContainer, sendStdinToBoxyContainer, waitCommandInBoxyC
 import { executeSafely, redactSecrets } from "./safety_filter.js";
 import { buildRunDetailsBlock, insertRunDetailsSection, stripRunDetailsBlock } from "./comment_format.js";
 import { can, describeDenial } from "./permissions.js";
+import { getBoxyWallet, checkBitcoinBalance, signWithBoxyWallet } from "./wallet.js";
 
 
 const readMemoryDeclaration = {
@@ -345,6 +346,50 @@ const fetchDeclaration = {
     required: ["url"],
   },
 };
+const getBitcoinWalletDeclaration = {
+  name: "get_bitcoin_wallet",
+  description: "Get Boxy's own Bitcoin wallet information including its receiving addresses (Native SegWit bc1q... and Legacy 1...), public key, balance in satoshis and BTC, transaction count, and block explorer link.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      fetch_balance: {
+        type: Type.BOOLEAN,
+        description: "Whether to query the blockchain explorer for live balance. Defaults to true."
+      }
+    }
+  }
+};
+const checkBitcoinBalanceDeclaration = {
+  name: "check_bitcoin_balance",
+  description: "Check the live balance, transaction count, and address details for Boxy's Bitcoin wallet or any provided Bitcoin address.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      address: {
+        type: Type.STRING,
+        description: "The Bitcoin address to check (defaults to Boxy's own Bitcoin address if omitted)."
+      },
+      network: {
+        type: Type.STRING,
+        description: "The Bitcoin network ('mainnet' or 'testnet'). Defaults to 'mainnet'."
+      }
+    }
+  }
+};
+const signBitcoinMessageDeclaration = {
+  name: "sign_bitcoin_message",
+  description: "Cryptographically sign a text message using Boxy's Bitcoin wallet private key to prove ownership of Boxy's address or endorse a statement.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      message: {
+        type: Type.STRING,
+        description: "The message string to cryptographically sign."
+      }
+    },
+    required: ["message"]
+  }
+};
 export const boxyReviewTools = [
   readMemoryDeclaration,
   saveMemoryDeclaration,
@@ -361,7 +406,10 @@ export const boxyReviewTools = [
   webSearchDeclaration,
   fetchDeclaration,
   saveStickyNoteDeclaration,
- closeOrOpenIssueDeclaration
+  closeOrOpenIssueDeclaration,
+  getBitcoinWalletDeclaration,
+  checkBitcoinBalanceDeclaration,
+  signBitcoinMessageDeclaration
 ];
 export const boxyWebhookTools = [
   readMemoryDeclaration,
@@ -382,7 +430,10 @@ export const boxyWebhookTools = [
   waitCommandDeclaration,
   killCommandDeclaration,
   webSearchDeclaration,
-  fetchDeclaration
+  fetchDeclaration,
+  getBitcoinWalletDeclaration,
+  checkBitcoinBalanceDeclaration,
+  signBitcoinMessageDeclaration
 ];
 export const boxyBackgroundTools = [
   readMemoryDeclaration,
@@ -404,7 +455,10 @@ export const boxyBackgroundTools = [
   waitCommandDeclaration,
   killCommandDeclaration,
   webSearchDeclaration,
-  fetchDeclaration
+  fetchDeclaration,
+  getBitcoinWalletDeclaration,
+  checkBitcoinBalanceDeclaration,
+  signBitcoinMessageDeclaration
 ];
 function sanitizeForLog(value) {
   try {
@@ -956,6 +1010,25 @@ export async function executeTool(call, context, app, activityLog, authorRole = 
         reaction_id: data.id 
       };
     } 
+    else if (call.name === "get_bitcoin_wallet") {
+      const fetchBalance = call.args?.fetch_balance !== false;
+      toolResult = await getBoxyWallet({ fetchBalance });
+    }
+    else if (call.name === "check_bitcoin_balance") {
+      const { address, network } = call.args || {};
+      toolResult = await checkBitcoinBalance(address, network);
+    }
+    else if (call.name === "sign_bitcoin_message") {
+      if (!can(authorRole, "useRepoCredentials")) {
+        toolResult = {
+          blocked: true,
+          error: `Permission denied: signing Bitcoin messages requires authorization from ${describeDenial("useRepoCredentials", authorRole)}.`
+        };
+      } else {
+        const { message } = call.args;
+        toolResult = await signWithBoxyWallet(message);
+      }
+    }
     else {
       toolResult = { error: "Tool does not exist" };
     }

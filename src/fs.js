@@ -109,9 +109,35 @@ export async function saveContainerMap(containerMap) {
   await fs.writeFile(CONTAINERS_FILE, JSON.stringify(containerMap, null, 2), "utf-8");
 }
 
+/**
+ * Loads Boxy's persistent Bitcoin wallet from file.
+ * @returns {Promise<object|null>} Parsed wallet data or null if not found.
+ */
+export async function loadWallet() {
+  try {
+    const data = await fs.readFile(WALLET_FILE, "utf-8");
+    return JSON.parse(data);
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      return null;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Persists Boxy's Bitcoin wallet data to file.
+ * @param {object} walletData - Wallet data to save.
+ * @returns {Promise<void>}
+ */
+export async function saveWallet(walletData) {
+  await fs.writeFile(WALLET_FILE, JSON.stringify(walletData, null, 2), "utf-8");
+}
+
 export const NOTEBOOK_FILE = path.resolve("./boxy_notebook.json");
 export const STICKY_NOTES_FILE = path.resolve("./boxy_sticky_notes.json"); 
 export const TODO_LIST_FILE = path.resolve("./boxy_todo_list.json");
 export const REVIEWS_FILE = path.resolve("./boxy_reviews.json");
 export const REVERT_FILE = path.resolve("./boxy_revert_pending.json");
 export const CONTAINERS_FILE = path.resolve("./boxy_containers.json");
+export const WALLET_FILE = path.resolve("./boxy_wallet.json");
