@@ -5,6 +5,7 @@ import { loadNotebook, loadTodoList, loadReviews, loadStickyNotes, REVERT_FILE }
 import { callAIWithFallback } from "./ai.js";
 import { executeTool, boxyWebhookTools, boxyBackgroundTools, prependActivityLog, stripRunDetails } from "./tools.js"; 
 import { triggerCodeReview, handleWorkflowCompleted, handleReviewCommentReply } from './review.js';
+import { handlePullRequestGate } from './pr_gate.js';
 import express from "express";
 const workflowEvents = new EventEmitter();
 
@@ -63,17 +64,7 @@ async function complainIfSkillIssue(app) {
     await fs.unlink(REVERT_FILE);
 
   } catch (err) {
-    
-      app.log.error("good news", err);
-      await octokit.rest.repos.createCommitStatus({
-        owner: "OmniBlocks",
-        repo: "Boxy-gh",
-        sha: brokenSha,
-        state: "success",
-        context: "boxy/system-update",
-        description: `Updated`,
-      });
-    
+    app.log.error("good news", err);
   }
 }
 export async function labelIssue(context, label) {
@@ -338,7 +329,10 @@ async function startBackgroundQueue(app) {
       app.log.error("Queue worker error: " + err.message);
     }
 
-    await new Promise(resolve => setTimeout(resolve, 30000));
+    await new Promise(resolve => {
+      const timer = setTimeout(resolve, 30000);
+      if (timer.unref) timer.unref();
+    });
   }
 }
 
@@ -407,12 +401,31 @@ async function boxyCommentorIssue(context, app, startCodeReview) {
   if (!textBody.includes(mentionHandle) && isComment) return;
 
   if (textBody.trim() === `${mentionHandle} review` && isPullRequest) {
+    const { owner, repo } = context.repo();
+    const prNumber = context.payload.issue.number;
+    try {
+      const prRes = await context.octokit.rest.pulls.get({
+        owner,
+        repo,
+        pull_number: prNumber,
+      });
+      if (prRes.data.state === "closed") {
+        return await context.octokit.rest.issues.createComment({
+          owner,
+          repo,
+          issue_number: prNumber,
+          body: `This pull request is closed. It must be reopened by an organization member or @OmniBlocks/coders before a code review can proceed.`,
+        });
+      }
+    } catch (err) {
+      app.log.warn(`Could not fetch PR #${prNumber} details: ${err.message}`);
+    }
+
     // Asynchronicity is beautiful, isn't it?
     return await Promise.all([
       startCodeReview(context, app),
       reactToUserComment(context, app, 'eyes'),
     ]);
-  
   }
 
   const cleanedComment = textBody.replace(/[.,#!$%\^&\*;:{}=\-_`~?]/g, "").trim();
@@ -759,8 +772,11 @@ let loopCount = 0;
  */
 export default (app, { addHandler }) => {
   try {
-  startBackgroundQueue(app);
-  complainIfSkillIssue(app);
+  const isTestEnv = process.env.NODE_ENV === "test" || Boolean(process.env.NODE_TEST_CONTEXT) || process.execArgv.includes("--test");
+  if (!isTestEnv) {
+    startBackgroundQueue(app);
+    complainIfSkillIssue(app);
+  }
 
   async function preparePrContainer(context) {
     try {
@@ -806,11 +822,19 @@ export default (app, { addHandler }) => {
   }
 
   app.on(["issue_comment.created", "discussion_comment.created", "issues.opened"], async (context) => {
-    boxyCommentorIssue(context, app, startCodeReview);
+    const promise = boxyCommentorIssue(context, app, startCodeReview);
+    if (process.env.NODE_ENV === "test") {
+      return await promise;
+    }
     return;
   });
 
-  app.on(["pull_request.opened", "pull_request.synchronize", "pull_request.reopened"], async (context) => await startCodeReview(context, app));
+  app.on(["pull_request.opened", "pull_request.synchronize", "pull_request.reopened"], async (context) => {
+    const gateResult = await handlePullRequestGate(context, app);
+    if (gateResult.allowed) {
+      await startCodeReview(context, app);
+    }
+  });
 
   app.on("pull_request.closed", async (context) => {
     await cleanupPrContainer(context);
@@ -938,12 +962,18 @@ export default (app, { addHandler }) => {
 
     }
   });
- addHandler((req, res) => {
-    if (req.url.startsWith("/llm")) {
-      aiEndpoint(req, res);
-      return true;  
+  if (typeof addHandler === "function") {
+    try {
+      addHandler((req, res) => {
+        if (req.url && req.url.startsWith("/llm")) {
+          aiEndpoint(req, res);
+          return true;  
+        }
+      });
+    } catch (err) {
+      app.log.warn(`Could not register HTTP handler (expected in test/serverless environment): ${err.message}`);
     }
-  });
+  }
   } catch (e) {
 const trace = e.stack || e.message;
 app.log.error(trace, "AN ERROR OCCURRED");

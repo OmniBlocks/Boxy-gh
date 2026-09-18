@@ -5,6 +5,7 @@ import { runCommandInBoxyContainer, sendStdinToBoxyContainer, waitCommandInBoxyC
 import { executeSafely, redactSecrets } from "./safety_filter.js";
 import { buildRunDetailsBlock, insertRunDetailsSection, stripRunDetailsBlock } from "./comment_format.js";
 import { can, describeDenial } from "./permissions.js";
+import { analyzeHumor } from "./humor.js";
 
 
 const readMemoryDeclaration = {
@@ -764,7 +765,29 @@ export async function executeTool(call, context, app, activityLog, authorRole = 
       }
 
        
-      toolResult = { diff: formattedLines.join("\n").substring(0, 50000) };
+      const rawDiff = formattedLines.join("\n");
+      const humorCheck = analyzeHumor(rawDiff);
+      try {
+        const reviews = await loadReviews();
+        const prKey = call.args.pull_number.toString();
+        if (reviews[prKey]) {
+          reviews[prKey].humorAnalysis = humorCheck;
+          await saveReviews(reviews);
+        }
+      } catch (err) {
+        // Non-critical if reviews state cannot be updated
+      }
+
+      toolResult = {
+        diff: rawDiff.substring(0, 50000),
+        humor_analysis: humorCheck.summary,
+        ...(humorCheck.attemptsToRemoveHumor
+          ? { humor_policy_warning: "MANDATORY POLICY: This diff removes humor or jokes from the codebase. Boxy must REJECT (REQUEST_CHANGES) this PR." }
+          : {}),
+        ...(humorCheck.attemptsToAddHumor
+          ? { humor_policy_note: "MANDATORY POLICY: This diff adds humor or jokes to the codebase. Boxy should ACCEPT (APPROVE) this PR if functionally sound." }
+          : {})
+      };
     }
     else if (call.name === "execute_command") {
       // pass whether it's a webhook triggered by issues comment added, issue opened, or code review comment
@@ -924,6 +947,13 @@ export async function executeTool(call, context, app, activityLog, authorRole = 
       const reviews = await loadReviews();
       const prKey = call.args.pull_number.toString();
       const draftComments = (reviews[prKey] && reviews[prKey].draft_comments) ? reviews[prKey].draft_comments : [];
+
+      if (reviews[prKey]?.humorAnalysis?.attemptsToRemoveHumor && call.args.event === "APPROVE") {
+        toolResult = {
+          error: "HUMOR POLICY ENFORCEMENT: Cannot APPROVE this pull request because it attempts to remove humor from OmniBlocks. Boxy's policy strictly mandates submitting 'REQUEST_CHANGES' instead."
+        };
+        return toolResult;
+      }
 
       await context.octokit.rest.pulls.createReview({
         owner,

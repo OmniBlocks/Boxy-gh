@@ -2,6 +2,7 @@ import AdmZip from 'adm-zip';
 import { callAIWithFallback } from './ai.js';
 import { loadReviews, saveReviews, loadNotebook, loadTodoList, loadStickyNotes } from './fs.js';
 import { boxyReviewTools, executeTool, boxyWebhookTools, prependActivityLog, stripRunDetails } from './tools.js';
+import { analyzeHumor } from './humor.js';
 
 export async function triggerCodeReview(context, app) {
   let pr;
@@ -27,6 +28,10 @@ export async function triggerCodeReview(context, app) {
 
   const author = pr.user.login;
   if (pr.user.type === "Bot" || author.includes("[bot]")) return;
+  if (pr.state === "closed") {
+    app.log.warn(`PR #${pr.number} is closed, skipping code review.`);
+    return;
+  }
 
   const comments = await context.octokit.paginate(context.octokit.rest.issues.listComments, {
     owner: context.repo().owner, repo: context.repo().repo, issue_number: pr.number, per_page: 100
@@ -166,6 +171,26 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
         : "- No memories saved yet.";
   const reviewStickyNotes = await loadStickyNotes();
 
+  let humorAnalysis = null;
+  try {
+    const diffRes = await context.octokit.rest.pulls.get({
+      owner: context.repo().owner,
+      repo: context.repo().repo,
+      pull_number: Number(prNum),
+      mediaType: { format: "diff" }
+    });
+    if (diffRes?.data) {
+      humorAnalysis = analyzeHumor(diffRes.data, prDescription.data);
+      if (reviewState) {
+        reviewState.humorAnalysis = humorAnalysis;
+        reviews[prNum] = reviewState;
+        await saveReviews(reviews);
+      }
+    }
+  } catch (err) {
+    app.log.warn(`Could not pre-fetch diff for humor analysis: ${err.message}`);
+  }
+
   const systemPrompt = `
     You are Boxy, an automated assistant for the OmniBlocks organization and the mascot of OmniBlocks. You are currently working on a background PR review task in the ${reviewRepoKey} repository.
     You are doing a DEEP code review for ${reviewRepoKey} PR #${prNum}.
@@ -215,6 +240,14 @@ export async function handleWorkflowCompleted(context, app, manual = false, manu
     You can include nitpicks if you want in a details tag. Use emojis for each details tag, but don't use them in actual text unless it is a quote.
     Since you can be so casual, you can do a little trolling, but only in very specific contexts. If the diff/code in the PR is so genuinely garbage that it seems intentional, or is blank, you can be playful and roast the author, and close the PR anyways. Same for blatant spam. But if the code is just a little bad that it doesn't seem intentional, be friendly and assume it wasn't intentional. 
     If PR is outright spam or abusive, you must close it and don't review it. 
+
+    7. HUMOR POLICY (MANDATORY PROJECT REQUIREMENT):
+       OmniBlocks has an explicit humor policy:
+       - REJECT (use 'finish_pr_review' with 'REQUEST_CHANGES') any pull request that attempts to remove humor, jokes, personality, funny comments, or fun from the codebase or persona. In your review comments and summary, explicitly explain that OmniBlocks rejects removing humor.
+       - ACCEPT (use 'finish_pr_review' with 'APPROVE') any pull request that attempts to add good humor, jokes, funny comments, or playful easter eggs (provided the changes do not break functionality, introduce security issues, or violate kid-friendly rules).
+       ${humorAnalysis ? `\n    Automated Humor Pre-Analysis:
+       - Summary: ${humorAnalysis.summary}
+       ${humorAnalysis.attemptsToRemoveHumor ? "⚠️ CRITICAL WARNING: Diff analysis detected that this PR attempts to remove humor. You MUST issue a 'REQUEST_CHANGES' verdict rejecting the humor removal!" : ""}${humorAnalysis.attemptsToAddHumor ? "🎉 NOTICE: Diff analysis detected that this PR attempts to add humor. You should issue an 'APPROVE' verdict if functionality is correct and safe!" : ""}` : ""}
 
   `;
 
