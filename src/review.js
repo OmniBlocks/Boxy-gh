@@ -28,6 +28,43 @@ export async function triggerCodeReview(context, app) {
   const author = pr.user.login;
   if (pr.user.type === "Bot" || author.includes("[bot]")) return;
 
+  const authorRole = pr.author_association || "NONE";
+  const isOrgMember = ["MEMBER", "OWNER", "COLLABORATOR"].includes(authorRole);
+  const whitelist = (process.env.BOXY_WHITELIST || "").split(",").map(s => s.trim().toLowerCase());
+  const isWhitelisted = whitelist.includes(author.toLowerCase());
+
+  if (!isOrgMember && !isWhitelisted) {
+    await context.octokit.rest.issues.createComment({
+      owner: context.repo().owner,
+      repo: context.repo().repo,
+      issue_number: pr.number,
+      body: `Hi @${author}! Thank you for your contribution. However, since you aren't in the organization and aren't explicitly whitelisted, I am pre-emptively closing this PR. @OmniBlocks/coders please review and reopen before a review.`
+    });
+    await context.octokit.rest.pulls.update({
+      owner: context.repo().owner,
+      repo: context.repo().repo,
+      pull_number: pr.number,
+      state: "closed"
+    });
+    return;
+  }
+
+  if (pr.title.trim().toLowerCase().startsWith("revert") && authorRole !== "OWNER") {
+    await context.octokit.rest.issues.createComment({
+      owner: context.repo().owner,
+      repo: context.repo().repo,
+      issue_number: pr.number,
+      body: `Hi @${author}, you cannot attempt to revert other PRs entirely or revert commits unless you have 'OWNER' permissions. This PR has been rejected.`
+    });
+    await context.octokit.rest.pulls.update({
+      owner: context.repo().owner,
+      repo: context.repo().repo,
+      pull_number: pr.number,
+      state: "closed"
+    });
+    return;
+  }
+
   const comments = await context.octokit.paginate(context.octokit.rest.issues.listComments, {
     owner: context.repo().owner, repo: context.repo().repo, issue_number: pr.number, per_page: 100
   });
