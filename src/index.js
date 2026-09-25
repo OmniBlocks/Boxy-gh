@@ -188,7 +188,7 @@ async function createCommentForContext(context, body) {
   const repo = context.repo();
   if (context.name === "discussion_comment") {
     return await replyToDiscussionComment(context.octokit, {
-      owner: repo.owner,
+      owner: repo.owner, 
       repo: repo.repo,
       discussion_comment_id: context.payload.comment.id,
       discussion_comment_node_id: context.payload.comment.node_id,
