@@ -10,11 +10,16 @@ const workflowEvents = new EventEmitter();
 
 
 async function complainIfSkillIssue(app) {
+  let brokenSha;
+  let safeSha;
+  let octokit;
+
   try {
     const data = await fs.readFile(REVERT_FILE, "utf-8");
-    const { brokenSha, safeSha } = JSON.parse(data);
+    ({ brokenSha, safeSha } = JSON.parse(data));
     app.log.warn(`someone broke me: ${brokenSha}, Safe SHA: ${safeSha}.pls fix`);
     const octopus = await app.auth();
+    octokit = octopus;
     const { data: installations } = await octopus.rest.apps.listInstallations();
     const firstInstallation = installations[0];
 
@@ -23,7 +28,7 @@ async function complainIfSkillIssue(app) {
 
     
     if (firstInstallation) {
-      const octokit = await app.auth(firstInstallation.id);
+      octokit = await app.auth(firstInstallation.id);
       
       const commit = await octokit.rest.repos.getCommit({
         owner: "OmniBlocks",
@@ -65,14 +70,16 @@ async function complainIfSkillIssue(app) {
   } catch (err) {
     
       app.log.error("good news", err);
-      await octokit.rest.repos.createCommitStatus({
-        owner: "OmniBlocks",
-        repo: "Boxy-gh",
-        sha: brokenSha,
-        state: "success",
-        context: "boxy/system-update",
-        description: `Updated`,
-      });
+      if (octokit && brokenSha) {
+        await octokit.rest.repos.createCommitStatus({
+          owner: "OmniBlocks",
+          repo: "Boxy-gh",
+          sha: brokenSha,
+          state: "success",
+          context: "boxy/system-update",
+          description: `Updated`,
+        });
+      }
     
   }
 }
