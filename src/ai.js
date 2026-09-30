@@ -1143,6 +1143,10 @@ export async function callAIWithFallback({ contents, tools, appLog, needsBigBrai
         const functionCalls = [];
         const parts = [];
 
+        if (text.contains("The account behind this API key doesn't have enough credits")) {
+          throw new Error(text);
+        }
+
         if (message.tool_calls && message.tool_calls.length > 0) {
           for (const tc of message.tool_calls) {
             if (tc.type === "function") {
