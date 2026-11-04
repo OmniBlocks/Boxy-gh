@@ -1,14 +1,18 @@
-# boxy
+# Boxy
 
-> A GitHub App built with [Probot](https://github.com/probot/probot) that our assistant for our omniblocks repo
+## What is Boxy? (the assistant)
+
+Boxy, the GitHub app, is an AI assistant based off our mascot, Boxy.
 
 
 Boxy can respond to comments on issues and PRs, start background tasks to make plans and help on the codebase, and review PRs!
 Boxy is meant to be for people who know what they are doing and are actual developers. It is NOT a slop-generating vibe coding clanker that will make everything for you. It is meant to review PRs made by humans, and help perform tasks to save time, not to replace a human's knowledge.
 
+## Installing
 
+The app isn't ready for public use yet, since it's mainly an in-house assistant, but you can install it by clicking on its profile any time you see it in a comment or commit around our repo.
 
-## Setup
+## Self hosting
 
 install pnpm if you haven't already (it's better than npm trust)
 ```sh
