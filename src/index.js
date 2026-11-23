@@ -945,26 +945,26 @@ export default (app, { addHandler }) => {
       // lol idk why i wrote it so public facing if no one public is really gonna use this
 
     }
-    aiEndpoint.post(["/decisions", "/decisions/"], async (req, res) => {
-  try {
-    // if this one exists for modapi too i guess we won't need the regular llm one? I guess its fine to keep it
-    if (!req.body?.input || !req.body?.questions) {
-      return res.status(400).json({
-        error: "Both 'input' and 'questions' are required."
+  });
+  aiEndpoint.post(["/decisions", "/decisions/"], async (req, res) => {
+    try {
+      // if this one exists for modapi too i guess we won't need the regular llm one? I guess its fine to keep it
+      if (!req.body?.input || !req.body?.questions) {
+        return res.status(400).json({
+          error: "Both 'input' and 'questions' are required."
+        });
+      }
+
+      const result = await makeDecision({
+        input: req.body.input,
+        questions: req.body.questions
       });
+
+      return res.status(200).json({ result });
+    } catch (err) {
+      app.log.error("Error in /decisions endpoint:", err);
+      return res.status(500).json({ error: err.message });
     }
-
-    const result = await makeDecision({
-      input: req.body.input,
-      questions: req.body.questions
-    });
-
-    return res.status(200).json({ result });
-  } catch (err) {
-    app.log.error("Error in /decisions endpoint:", err);
-    return res.status(500).json({ error: err.message });
-  }
-});
   });
  addHandler((req, res) => {
   if (req.url.startsWith("/llm") || req.url.startsWith("/decisions")) {
