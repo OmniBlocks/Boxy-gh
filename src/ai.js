@@ -172,6 +172,19 @@ export function appendModelIdentification(text, model, usage) {
 
   return body ? `${runDetails}\n\n${body}` : runDetails;
 }
+export async function makeDecision({ input, questions }) {
+  const client = new GoogleGenAI({
+    apiKey: process.env.GEMINI_API_KEY,
+    httpOptions: { apiVersion: "v1beta" }
+  });
+
+  return client.decisions.create({
+    model: "gemini-decision-1",
+    input,
+    questions
+  });
+}
+
 export async function callAIWithFallback({ contents, tools, appLog, needsBigBrain = false, customModel = "" }) {
   // needs big brain is optional param for when stronk models for thinking reviews or smth
 
