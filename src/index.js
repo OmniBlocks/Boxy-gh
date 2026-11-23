@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { EventEmitter } from "events";
 import fs from "fs/promises";
 import { loadNotebook, loadTodoList, loadReviews, loadStickyNotes, REVERT_FILE } from "./fs.js";
-import { callAIWithFallback } from "./ai.js";
+import { callAIWithFallback, makeDecision } from "./ai.js";
 import { executeTool, boxyWebhookTools, boxyBackgroundTools, prependActivityLog, stripRunDetails } from "./tools.js"; 
 import { triggerCodeReview, handleWorkflowCompleted, handleReviewCommentReply } from './review.js';
 import express from "express";
@@ -946,12 +946,32 @@ export default (app, { addHandler }) => {
 
     }
   });
- addHandler((req, res) => {
-    if (req.url.startsWith("/llm")) {
-      aiEndpoint(req, res);
-      return true;  
+  aiEndpoint.post(["/decisions", "/decisions/"], async (req, res) => {
+    try {
+      // if this one exists for modapi too i guess we won't need the regular llm one? I guess its fine to keep it
+      if (!req.body?.input || !req.body?.questions) {
+        return res.status(400).json({
+          error: "Both 'input' and 'questions' are required."
+        });
+      }
+
+      const result = await makeDecision({
+        input: req.body.input,
+        questions: req.body.questions
+      });
+
+      return res.status(200).json({ result });
+    } catch (err) {
+      app.log.error("Error in /decisions endpoint:", err);
+      return res.status(500).json({ error: err.message });
     }
   });
+ addHandler((req, res) => {
+  if (req.url.startsWith("/llm") || req.url.startsWith("/decisions")) {
+    aiEndpoint(req, res);
+    return true;
+  }
+});
   } catch (e) {
 const trace = e.stack || e.message;
 app.log.error(trace, "AN ERROR OCCURRED");
